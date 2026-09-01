@@ -36,6 +36,44 @@ export function renumberRoundsStatements(db) {
   ];
 }
 
+/**
+ * 아직 안 옮겨진 게 있는지 쓰기 없이 확인만 한다. /setup 이 "업데이트 필요" 를
+ * 알려 주는 데 쓴다. 테이블이 아예 없으면(초기 설정 전) 빈 배열이다.
+ */
+export async function pendingMigrations(db) {
+  const pending = [];
+
+  const users = await columnsOf(db, 'users');
+  if (!users.length) return pending;
+
+  if (!users.includes('avatar')) pending.push('users.avatar');
+  if (!users.includes('is_setter')) pending.push('users.is_setter');
+
+  const rounds = await columnsOf(db, 'rounds');
+  if (rounds.includes('answer_minutes')) pending.push('rounds.answer_seconds');
+  else if (rounds.length && !rounds.includes('setter_user_id')) pending.push('rounds.setter_user_id');
+
+  const guesses = await columnsOf(db, 'guesses');
+  if (guesses.includes('guess_minutes')) pending.push('guesses.guess_seconds');
+
+  const results = await columnsOf(db, 'results');
+  if (results.includes('diff') && !results.includes('diff_seconds')) {
+    pending.push('results.diff_seconds');
+  }
+
+  // 운영자 전용 계정이 아직 없으면 계정 정리도 남아 있는 것이다
+  const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
+  if (seedAdmin) {
+    const admin = await db
+      .prepare(`SELECT id FROM users WHERE username = ?`)
+      .bind(seedAdmin.username)
+      .first();
+    if (!admin) pending.push('users.admin-account');
+  }
+
+  return pending;
+}
+
 export async function migrate(db) {
   const applied = [];
 

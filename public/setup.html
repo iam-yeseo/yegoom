@@ -40,10 +40,11 @@
     <section class="card">
       <div class="card__label">스키마 업데이트</div>
       <p class="muted" style="margin: 0 0 12px; font-size: 14px">
-        예전 버전(분 단위 · 프로필 없음)으로 만든 데이터베이스를 지금 모양으로 옮깁니다.
-        기록은 그대로 옮겨지고, 이미 최신이면 아무 일도 일어나지 않습니다.
+        예전 버전으로 만든 데이터베이스를 지금 모양으로 옮깁니다. 기록은 그대로
+        옮겨지고, 이미 최신이면 아무 일도 일어나지 않습니다.
         운영자로 로그인했거나 설정 토큰이 있어야 실행됩니다.
       </p>
+      <p id="migrate-state" class="msg hidden" style="margin: 0 0 12px"></p>
       <button id="migrate" class="btn btn--ghost" type="button">스키마 업데이트 실행</button>
     </section>
 
@@ -61,6 +62,7 @@
       run: document.getElementById('run'),
       go: document.getElementById('go'),
       migrate: document.getElementById('migrate'),
+      migrateState: document.getElementById('migrate-state'),
       setterList: document.getElementById('setter-list'),
     };
 
@@ -136,6 +138,26 @@
 
     async function refresh() {
       const s = await api('/api/bootstrap');
+
+      // 배포만 하고 스키마를 안 옮기면 admin 계정이 없어 로그인이 막힌다.
+      // 남은 게 있으면 눈에 띄게 알려 준다.
+      const pending = s.pendingMigration ?? [];
+      if (pending.length) {
+        const needsAdmin = pending.includes('users.admin-account');
+        showMessage(
+          el.migrateState,
+          `업데이트가 필요합니다 (${pending.join(', ')}).` +
+            (needsAdmin ? ' 실행하면 운영자 계정 admin 이 만들어집니다.' : ''),
+          'error',
+        );
+        el.migrate.classList.remove('btn--ghost');
+      } else if (s.ready) {
+        showMessage(el.migrateState, '이미 최신 스키마입니다.', 'ok');
+        el.migrate.classList.add('btn--ghost');
+      } else {
+        showMessage(el.migrateState, '');
+      }
+
       if (s.ready) {
         el.status.innerHTML =
           `<p style="margin:0 0 10px">설정이 끝났습니다. 계정 ${s.userCount}개가 있습니다.</p>` +
@@ -178,7 +200,12 @@
         const res = await api(path, { method: 'POST' });
         showMessage(
           el.msg,
-          res.migrated ? `옮긴 항목: ${res.applied.join(', ')}` : '이미 최신 스키마입니다.',
+          res.migrated
+            ? `옮긴 항목: ${res.applied.join(', ')}.` +
+                (res.applied.includes('users.admin-account')
+                  ? ' 이제 admin / admin 으로 로그인하세요.'
+                  : '')
+            : '이미 최신 스키마입니다.',
           'ok',
         );
         await refresh().catch(() => {});

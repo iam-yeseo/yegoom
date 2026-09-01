@@ -1,5 +1,5 @@
 import { fail, json, timingSafeEqual } from '../lib/util.js';
-import { migrate } from '../lib/migrate.js';
+import { migrate, pendingMigrations } from '../lib/migrate.js';
 import { SEED_USERS } from '../lib/seed.js';
 
 /**
@@ -16,7 +16,14 @@ import { SEED_USERS } from '../lib/seed.js';
 /** 설정이 끝났는지 확인 — /setup 페이지가 상태를 보여주는 데 쓴다. */
 export async function onRequestGet(context) {
   const status = await readStatus(context.env.DB);
-  return json({ ok: true, ...status });
+  // 스키마가 예전 모양이면 /setup 이 "업데이트 필요" 를 띄울 수 있게 알려 준다
+  let pending = [];
+  try {
+    pending = await pendingMigrations(context.env.DB);
+  } catch {
+    /* 테이블이 아직 없을 수 있다 */
+  }
+  return json({ ok: true, ...status, pendingMigration: pending });
 }
 
 export async function onRequestPost(context) {
