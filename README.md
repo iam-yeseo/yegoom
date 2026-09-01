@@ -70,45 +70,63 @@ npm run deploy
 
 처음 배포하면 `https://<프로젝트이름>.pages.dev` 주소가 나옵니다.
 
-### 4. 계정 생성용 토큰 등록
+### 4. 계정 만들기
 
-계정은 대시보드가 아니라 `/api/setup` 엔드포인트로 만듭니다.
-아무나 못 쓰도록 시크릿 토큰을 하나 걸어 둡니다.
-
-```bash
-npx wrangler pages secret put SETUP_TOKEN
-# 아무 긴 랜덤 문자열을 입력 (예: openssl rand -hex 24 결과)
-```
-
-### 5. 계정 4개 만들기
+계정 4개가 `seed-users.sql` 에 이미 준비돼 있습니다. 그대로 넣으면 됩니다.
 
 ```bash
-SETUP_TOKEN=아까_입력한_토큰 npm run users -- https://내앱.pages.dev
+npm run db:seed
 ```
 
-플레이어 3명과 운영자 1명의 아이디 / 표시 이름 / 비밀번호를 차례로 물어봅니다.
-엔터만 누르면 기본값(`player1`~`player3`, `admin`)이 쓰입니다.
+| 아이디 | 역할 | 표시 이름 |
+|---|---|---|
+| `yeseo` | 플레이어 | yeseo |
+| `min` | 플레이어 | min |
+| `bin` | 플레이어 | bin |
+| `siwon` | **운영자** | siwon |
 
-같은 명령을 다시 실행하면 **비밀번호 재설정**도 됩니다.
-(각자 로그인해서 `/account` 에서 직접 바꿀 수도 있습니다.)
+비밀번호는 아이디와 같습니다. 각자 로그인한 뒤 `/account` 에서 바꿀 수 있습니다.
+
+> `seed-users.sql` 에는 평문 비밀번호가 아니라 PBKDF2 해시만 들어 있습니다.
+> 다만 지금 비밀번호는 아이디와 같은 짧은 문자열이라, 이 저장소에 접근할 수 있는
+> 사람은 해시를 금방 되찾을 수 있습니다. 사내 4인용 게임이라 괜찮다면 그대로 쓰고,
+> 신경 쓰인다면 각자 `/account` 에서 비밀번호를 바꾸는 것으로 충분합니다.
 
 이제 `https://내앱.pages.dev` 에서 로그인하면 됩니다. 끝.
+
+### 계정을 나중에 바꾸고 싶다면
+
+**표시 이름·비밀번호를 다시 정하고 싶을 때** — `scripts/make-seed.mjs` 의 `USERS` 배열을
+고친 뒤 시드를 다시 만들어 넣습니다. 같은 아이디는 덮어쓰기 때문에 기록은 그대로 남습니다.
+
+```bash
+npm run seed:make
+npm run db:seed
+```
+
+**대화형으로 만들고 싶을 때** — `/api/setup` 엔드포인트를 쓰는 CLI 도 있습니다.
+아무나 못 쓰도록 토큰을 먼저 걸어 둡니다.
+
+```bash
+npx wrangler pages secret put SETUP_TOKEN     # 아무 긴 랜덤 문자열
+SETUP_TOKEN=방금_넣은_토큰 npm run users -- https://내앱.pages.dev
+```
+
+`SETUP_TOKEN` 을 설정하지 않으면 `/api/setup` 은 항상 503 으로 닫혀 있습니다.
+시드 SQL 만 쓸 거라면 토큰은 등록하지 않아도 됩니다.
 
 ---
 
 ## 로컬에서 개발하기
 
 ```bash
-cp .dev.vars.example .dev.vars     # SETUP_TOKEN 을 아무 값으로 채우기
 npm run db:init:local              # 로컬 D1 에 테이블 생성
+npm run db:seed:local              # 계정 4개 넣기
 npm run dev                        # http://localhost:8788
 ```
 
-다른 터미널에서 계정을 만듭니다.
-
-```bash
-SETUP_TOKEN=.dev.vars에_적은_값 npm run users -- http://localhost:8788
-```
+`/api/setup` 까지 로컬에서 써 보려면 `cp .dev.vars.example .dev.vars` 로
+`SETUP_TOKEN` 을 채운 뒤 `npm run dev` 를 다시 띄우면 됩니다.
 
 ---
 
@@ -125,6 +143,8 @@ functions/               Pages Functions (Workers 런타임에서 도는 API)
   _lib/game.js             정답 확정 및 우승자 판정
   api/…                    각 엔드포인트
 schema.sql               D1 테이블 정의
+seed-users.sql           계정 4개 시드 (해시 포함, 자동 생성됨)
+scripts/make-seed.mjs    seed-users.sql 생성기
 scripts/create-users.mjs 계정 생성 / 비밀번호 재설정 CLI
 ```
 

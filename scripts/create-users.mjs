@@ -39,9 +39,9 @@ for (const d of DEFAULTS) {
   const displayName = (await rl.question(`  표시 이름 (${d.displayName}): `)).trim() || d.displayName;
 
   let password = '';
-  while (password.length < 4) {
-    password = (await rl.question('  비밀번호 (4자 이상): ')).trim();
-    if (password.length < 4) console.log('  ! 4자 이상 입력해 주세요.');
+  while (password.length < 3) {
+    password = (await rl.question('  비밀번호 (3자 이상): ')).trim();
+    if (password.length < 3) console.log('  ! 3자 이상 입력해 주세요.');
   }
 
   users.push({ username, displayName, role: d.role, password });

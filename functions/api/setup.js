@@ -27,7 +27,7 @@ export async function onRequestPost(context) {
     const password = String(u.password ?? '');
 
     if (!username || !displayName) return fail(400, 'username 과 displayName 은 필수입니다.');
-    if (password.length < 4) return fail(400, `'${username}' 의 비밀번호는 4자 이상이어야 합니다.`);
+    if (password.length < 3) return fail(400, `'${username}' 의 비밀번호는 3자 이상이어야 합니다.`);
 
     const { hash, salt } = await hashPassword(password);
     await context.env.DB.prepare(

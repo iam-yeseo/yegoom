@@ -6,8 +6,8 @@ export async function onRequestPost(context) {
   if (response) return response;
 
   const { currentPassword, newPassword } = await readJson(context.request);
-  if (typeof newPassword !== 'string' || newPassword.length < 4) {
-    return fail(400, '새 비밀번호는 4자 이상이어야 합니다.');
+  if (typeof newPassword !== 'string' || newPassword.length < 3) {
+    return fail(400, '새 비밀번호는 3자 이상이어야 합니다.');
   }
 
   const db = context.env.DB;

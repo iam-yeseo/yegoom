@@ -10,6 +10,9 @@
     "db:create": "wrangler d1 create toigeun-db",
     "db:init:local": "wrangler d1 execute toigeun-db --local --file=./schema.sql",
     "db:init": "wrangler d1 execute toigeun-db --remote --file=./schema.sql",
+    "db:seed:local": "wrangler d1 execute toigeun-db --local --file=./seed-users.sql",
+    "db:seed": "wrangler d1 execute toigeun-db --remote --file=./seed-users.sql",
+    "seed:make": "node scripts/make-seed.mjs > seed-users.sql",
     "users": "node scripts/create-users.mjs"
   },
   "devDependencies": {
