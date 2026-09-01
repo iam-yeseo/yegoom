@@ -1,10 +1,10 @@
--- 퇴근시간 맞히기 · 테이블 정의
--- 자동 생성됨: npm run generate — 직접 고치지 말고 scripts/generate.mjs 를 고칠 것
+// 테이블 정의의 단일 출처.
+// 여기서 schema.sql 과 부트스트랩 엔드포인트가 함께 만들어지므로 둘이 어긋날 일이 없다.
+// 모두 IF NOT EXISTS 라 여러 번 실행해도 기존 데이터를 건드리지 않는다.
 
--- 적용: npm run db:init
--- 전부 IF NOT EXISTS 라 여러 번 실행해도 기존 데이터는 그대로다.
-
-CREATE TABLE IF NOT EXISTS users (
+export const SCHEMA_STATEMENTS = [
+  // 사용자: 플레이어 3명 + 운영자 1명
+  `CREATE TABLE IF NOT EXISTS users (
      id            INTEGER PRIMARY KEY AUTOINCREMENT,
      username      TEXT    NOT NULL UNIQUE,
      display_name  TEXT    NOT NULL,
@@ -12,43 +12,45 @@ CREATE TABLE IF NOT EXISTS users (
      password_hash TEXT    NOT NULL,
      password_salt TEXT    NOT NULL,
      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-   );
+   )`,
 
-CREATE TABLE IF NOT EXISTS sessions (
+  // 로그인 세션 (HttpOnly 쿠키에 담기는 토큰)
+  `CREATE TABLE IF NOT EXISTS sessions (
      token      TEXT    PRIMARY KEY,
      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
      created_at TEXT    NOT NULL DEFAULT (datetime('now')),
      expires_at TEXT    NOT NULL
-   );
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at)`,
 
-CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
-
-CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
-
-CREATE TABLE IF NOT EXISTS rounds (
+  // 라운드: 하루에 하나. game_date 는 KST 기준 YYYY-MM-DD
+  `CREATE TABLE IF NOT EXISTS rounds (
      game_date      TEXT    PRIMARY KEY,
      answer_minutes INTEGER,
      revealed_at    TEXT,
      created_by     INTEGER REFERENCES users(id),
      created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
-   );
+   )`,
 
-CREATE TABLE IF NOT EXISTS guesses (
+  // 플레이어의 예측
+  `CREATE TABLE IF NOT EXISTS guesses (
      game_date     TEXT    NOT NULL,
      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
      guess_minutes INTEGER NOT NULL CHECK (guess_minutes BETWEEN 0 AND 1439),
      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
      updated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (game_date, user_id)
-   );
+   )`,
 
-CREATE TABLE IF NOT EXISTS results (
+  // 정답 공개 시점에 확정되는 결과 (우승 횟수는 여기서 집계 -> 항상 재계산 가능)
+  `CREATE TABLE IF NOT EXISTS results (
      game_date  TEXT    NOT NULL,
      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
      diff       INTEGER NOT NULL,
      is_winner  INTEGER NOT NULL DEFAULT 0,
      created_at TEXT    NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (game_date, user_id)
-   );
-
-CREATE INDEX IF NOT EXISTS idx_results_user ON results(user_id);
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_results_user ON results(user_id)`,
+];

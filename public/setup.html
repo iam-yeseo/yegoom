@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1020" />
+  <meta name="robots" content="noindex" />
+  <title>초기 설정 · 퇴근시간 맞히기</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
+</head>
+<body>
+  <main class="auth">
+    <div class="auth__logo" aria-hidden="true">🛠️</div>
+    <h1 class="auth__title">초기 설정</h1>
+    <p class="auth__sub">테이블을 만들고 계정 4개를 넣습니다. 한 번만 하면 됩니다.</p>
+
+    <p id="msg" class="msg hidden" role="status"></p>
+
+    <section class="card">
+      <div class="card__label">상태</div>
+      <div id="status"><div class="skeleton"></div></div>
+      <button id="run" class="btn hidden" type="button" style="margin-top: 14px">
+        초기 설정 실행
+      </button>
+      <a id="go" class="btn btn--ghost hidden" href="/login" style="margin-top: 14px">
+        로그인하러 가기
+      </a>
+    </section>
+
+    <p class="center muted" style="font-size: 13px">
+      계정이 하나라도 생기면 이 페이지는 스스로 닫힙니다.
+    </p>
+  </main>
+
+  <script type="module">
+    import { api, escapeHtml, showMessage } from '/js/common.js';
+
+    const el = {
+      msg: document.getElementById('msg'),
+      status: document.getElementById('status'),
+      run: document.getElementById('run'),
+      go: document.getElementById('go'),
+    };
+
+    // SETUP_TOKEN 을 걸어 뒀다면 /setup?token=... 으로 들어온다
+    const token = new URLSearchParams(location.search).get('token');
+
+    function renderUsers(users) {
+      return users
+        .map(
+          (u) => `<div class="player">
+            <div class="player__avatar" aria-hidden="true">${escapeHtml(u.displayName.charAt(0))}</div>
+            <div class="player__body">
+              <div class="player__name">${escapeHtml(u.displayName)}</div>
+              <div class="player__meta">${escapeHtml(u.username)} · ${u.role === 'admin' ? '운영자' : '플레이어'}</div>
+            </div>
+          </div>`,
+        )
+        .join('');
+    }
+
+    async function refresh() {
+      const s = await api('/api/bootstrap');
+      if (s.ready) {
+        el.status.innerHTML =
+          `<p style="margin:0 0 10px">설정이 끝났습니다. 계정 ${s.userCount}개가 있습니다.</p>` +
+          renderUsers(s.users);
+        el.run.classList.add('hidden');
+        el.go.classList.remove('hidden');
+      } else {
+        el.status.innerHTML =
+          '<p class="muted" style="margin:0">아직 설정 전입니다. 아래 버튼을 눌러 주세요.</p>';
+        el.run.classList.remove('hidden');
+        el.go.classList.add('hidden');
+      }
+      return s;
+    }
+
+    el.run.addEventListener('click', async () => {
+      el.run.disabled = true;
+      el.run.textContent = '설정 중…';
+      showMessage(el.msg, '');
+      try {
+        const path = token ? `/api/bootstrap?token=${encodeURIComponent(token)}` : '/api/bootstrap';
+        const res = await api(path, { method: 'POST' });
+        showMessage(el.msg, `계정 ${res.userCount}개를 만들었습니다.`, 'ok');
+        await refresh();
+      } catch (err) {
+        showMessage(el.msg, err.message);
+        el.run.disabled = false;
+        el.run.textContent = '초기 설정 실행';
+        await refresh().catch(() => {});
+      }
+    });
+
+    try {
+      await refresh();
+    } catch (err) {
+      showMessage(el.msg, `상태를 확인하지 못했습니다: ${err.message}`);
+      el.status.innerHTML = '<p class="muted" style="margin:0">D1 바인딩을 확인해 주세요.</p>';
+    }
+  </script>
+</body>
+</html>

@@ -175,6 +175,7 @@ input[type='time'], input[type='date'] { color-scheme: dark; }
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  text-decoration: none;   /* <a class="btn"> 도 버튼처럼 보이게 */
   transition: transform 0.12s, opacity 0.15s;
   -webkit-tap-highlight-color: transparent;
 }

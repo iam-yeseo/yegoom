@@ -1,0 +1,79 @@
+import { fail, json, readCookie, SESSION_COOKIE, timingSafeEqual } from '../lib/util.js';
+import { SCHEMA_STATEMENTS } from '../lib/schema.js';
+import { SEED_USERS } from '../lib/seed.js';
+
+/**
+ * 최초 1회 초기 설정 — 테이블을 만들고 계정 4개를 넣는다.
+ *
+ * wrangler CLI 없이 브라우저에서 끝낼 수 있게 만든 엔드포인트라, 아무나 못 쓰도록
+ * 두 겹으로 막는다.
+ *   1) 계정이 이미 하나라도 있으면 거부한다 (한 번 쓰이면 스스로 닫힌다)
+ *   2) SETUP_TOKEN 시크릿이 설정돼 있으면 그 토큰까지 맞아야 한다
+ *
+ * 테이블 생성은 전부 IF NOT EXISTS 라 기존 데이터를 절대 지우지 않는다.
+ */
+
+/** 설정이 끝났는지 확인 — /setup 페이지가 상태를 보여주는 데 쓴다. */
+export async function onRequestGet(context) {
+  const status = await readStatus(context.env.DB);
+  return json({ ok: true, ...status });
+}
+
+export async function onRequestPost(context) {
+  const db = context.env.DB;
+
+  // SETUP_TOKEN 을 설정해 뒀다면 반드시 일치해야 한다
+  const expected = context.env.SETUP_TOKEN;
+  if (expected) {
+    const provided =
+      context.request.headers.get('x-setup-token') ??
+      new URL(context.request.url).searchParams.get('token') ??
+      '';
+    if (!timingSafeEqual(provided, expected)) {
+      return fail(401, '설정 토큰이 올바르지 않습니다.');
+    }
+  }
+
+  const before = await readStatus(db);
+  if (before.userCount > 0) {
+    return fail(409, '이미 초기 설정이 끝났습니다. 다시 실행할 수 없습니다.', {
+      users: before.users,
+    });
+  }
+
+  // 1. 테이블 (이미 있으면 그대로 둔다)
+  await db.batch(SCHEMA_STATEMENTS.map((sql) => db.prepare(sql)));
+
+  // 2. 계정
+  await db.batch(
+    SEED_USERS.map((u) =>
+      db
+        .prepare(
+          `INSERT INTO users (username, display_name, role, password_hash, password_salt)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(username) DO NOTHING`,
+        )
+        .bind(u.username, u.displayName, u.role, u.hash, u.salt),
+    ),
+  );
+
+  const after = await readStatus(db);
+  return json({ ok: true, created: true, ...after });
+}
+
+/** users 테이블이 아직 없을 수도 있으므로 조회 실패를 "설정 전"으로 본다. */
+async function readStatus(db) {
+  try {
+    const { results } = await db
+      .prepare(`SELECT username, display_name, role FROM users ORDER BY id`)
+      .all();
+    const users = (results ?? []).map((u) => ({
+      username: u.username,
+      displayName: u.display_name,
+      role: u.role,
+    }));
+    return { ready: users.length > 0, userCount: users.length, users };
+  } catch {
+    return { ready: false, userCount: 0, users: [] };
+  }
+}

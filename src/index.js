@@ -5,6 +5,7 @@
 // /api/* 만 다루면 된다.
 
 import * as adminAnswer from './routes/admin-answer.js';
+import * as bootstrap from './routes/bootstrap.js';
 import * as guess from './routes/guess.js';
 import * as history from './routes/history.js';
 import * as login from './routes/login.js';
@@ -27,6 +28,7 @@ const ROUTES = new Map([
   ['/api/password', password],
   ['/api/setup', setup],
   ['/api/admin/answer', adminAnswer],
+  ['/api/bootstrap', bootstrap],
 ]);
 
 // 라우트 모듈은 onRequestGet / onRequestPost / onRequestDelete 를 내보낸다.
