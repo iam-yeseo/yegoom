@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
      id            INTEGER PRIMARY KEY AUTOINCREMENT,
      username      TEXT    NOT NULL UNIQUE,
      display_name  TEXT    NOT NULL,
+     avatar        TEXT    NOT NULL DEFAULT '🙂',
      role          TEXT    NOT NULL CHECK (role IN ('player', 'admin')),
      password_hash TEXT    NOT NULL,
      password_salt TEXT    NOT NULL,
@@ -27,8 +28,12 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 
 CREATE TABLE IF NOT EXISTS rounds (
      game_date      TEXT    PRIMARY KEY,
-     answer_minutes INTEGER,
+     round_no       INTEGER,
+     answer_seconds INTEGER,
+     status         TEXT    NOT NULL DEFAULT 'open'
+                            CHECK (status IN ('open', 'settled', 'void')),
      revealed_at    TEXT,
+     closed_at      TEXT,
      created_by     INTEGER REFERENCES users(id),
      created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
    );
@@ -36,18 +41,19 @@ CREATE TABLE IF NOT EXISTS rounds (
 CREATE TABLE IF NOT EXISTS guesses (
      game_date     TEXT    NOT NULL,
      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-     guess_minutes INTEGER NOT NULL CHECK (guess_minutes BETWEEN 0 AND 1439),
+     guess_seconds INTEGER NOT NULL CHECK (guess_seconds BETWEEN 0 AND 86399),
      created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
      updated_at    TEXT    NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (game_date, user_id)
    );
 
 CREATE TABLE IF NOT EXISTS results (
-     game_date  TEXT    NOT NULL,
-     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-     diff       INTEGER NOT NULL,
-     is_winner  INTEGER NOT NULL DEFAULT 0,
-     created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+     game_date    TEXT    NOT NULL,
+     user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     diff_seconds INTEGER NOT NULL,
+     score        INTEGER NOT NULL DEFAULT 0,
+     is_winner    INTEGER NOT NULL DEFAULT 0,
+     created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (game_date, user_id)
    );
 

@@ -14,12 +14,13 @@ import { SCHEMA_STATEMENTS } from '../src/lib/schema.js';
 
 const ITERATIONS = 100_000;
 
-// 아이디와 비밀번호가 같은 계정 4개
+// 아이디와 비밀번호가 같은 계정 4개.
+// displayName(닉네임)과 avatar(프로필 한 글자)는 로그인 후 각자 바꿀 수 있는 초기값이다.
 const USERS = [
-  { username: 'yeseo', displayName: 'yeseo', role: 'player', password: 'yeseo' },
-  { username: 'min',   displayName: 'min',   role: 'player', password: 'min' },
-  { username: 'bin',   displayName: 'bin',   role: 'player', password: 'bin' },
-  { username: 'siwon', displayName: 'siwon', role: 'admin',  password: 'siwon' },
+  { username: 'yeseo', displayName: 'yeseo', avatar: '🐣', role: 'player', password: 'yeseo' },
+  { username: 'min',   displayName: 'min',   avatar: '🐤', role: 'player', password: 'min' },
+  { username: 'bin',   displayName: 'bin',   avatar: '🐥', role: 'player', password: 'bin' },
+  { username: 'siwon', displayName: 'siwon', avatar: '🔑', role: 'admin',  password: 'siwon' },
 ];
 
 function hashPassword(password) {
@@ -57,15 +58,16 @@ writeFileSync(
     banner('계정 시드'),
     '-- 적용: npm run db:seed',
     '-- 비밀번호는 PBKDF2-SHA256 10만회로 해싱돼 있어 이 파일에 평문은 없다.',
-    '-- 같은 아이디가 이미 있으면 이름/역할/비밀번호를 덮어쓴다.',
+    '-- 같은 아이디가 이미 있으면 닉네임/프로필/역할/비밀번호를 덮어쓴다.',
     '',
     seeded
       .map((u) =>
         [
-          `INSERT INTO users (username, display_name, role, password_hash, password_salt)`,
-          `VALUES (${q(u.username)}, ${q(u.displayName)}, ${q(u.role)}, ${q(u.hash)}, ${q(u.salt)})`,
+          `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)`,
+          `VALUES (${q(u.username)}, ${q(u.displayName)}, ${q(u.avatar)}, ${q(u.role)}, ${q(u.hash)}, ${q(u.salt)})`,
           `ON CONFLICT(username) DO UPDATE SET`,
           `  display_name  = excluded.display_name,`,
+          `  avatar        = excluded.avatar,`,
           `  role          = excluded.role,`,
           `  password_hash = excluded.password_hash,`,
           `  password_salt = excluded.password_salt;`,
@@ -90,5 +92,7 @@ writeFileSync(
 
 console.log('생성 완료: schema.sql, seed-users.sql, src/lib/seed.js');
 for (const u of seeded) {
-  console.log(`  ${u.role === 'admin' ? '운영자  ' : '플레이어'} ${u.username} — ${u.displayName}`);
+  console.log(
+    `  ${u.role === 'admin' ? '운영자  ' : '플레이어'} ${u.username} — ${u.avatar} ${u.displayName}`,
+  );
 }

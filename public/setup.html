@@ -28,6 +28,16 @@
       </a>
     </section>
 
+    <section class="card">
+      <div class="card__label">스키마 업데이트</div>
+      <p class="muted" style="margin: 0 0 12px; font-size: 14px">
+        예전 버전(분 단위 · 프로필 없음)으로 만든 데이터베이스를 지금 모양으로 옮깁니다.
+        기록은 그대로 옮겨지고, 이미 최신이면 아무 일도 일어나지 않습니다.
+        운영자로 로그인했거나 설정 토큰이 있어야 실행됩니다.
+      </p>
+      <button id="migrate" class="btn btn--ghost" type="button">스키마 업데이트 실행</button>
+    </section>
+
     <p class="center muted" style="font-size: 13px">
       계정이 하나라도 생기면 이 페이지는 스스로 닫힙니다.
     </p>
@@ -41,6 +51,7 @@
       status: document.getElementById('status'),
       run: document.getElementById('run'),
       go: document.getElementById('go'),
+      migrate: document.getElementById('migrate'),
     };
 
     // SETUP_TOKEN 을 걸어 뒀다면 /setup?token=... 으로 들어온다
@@ -50,7 +61,7 @@
       return users
         .map(
           (u) => `<div class="player">
-            <div class="player__avatar" aria-hidden="true">${escapeHtml(u.displayName.charAt(0))}</div>
+            <div class="player__avatar" aria-hidden="true">${escapeHtml(u.avatar ?? u.displayName.charAt(0))}</div>
             <div class="player__body">
               <div class="player__name">${escapeHtml(u.displayName)}</div>
               <div class="player__meta">${escapeHtml(u.username)} · ${u.role === 'admin' ? '운영자' : '플레이어'}</div>
@@ -91,6 +102,27 @@
         el.run.disabled = false;
         el.run.textContent = '초기 설정 실행';
         await refresh().catch(() => {});
+      }
+    });
+
+    el.migrate.addEventListener('click', async () => {
+      el.migrate.disabled = true;
+      el.migrate.textContent = '업데이트 중…';
+      showMessage(el.msg, '');
+      try {
+        const path = token ? `/api/migrate?token=${encodeURIComponent(token)}` : '/api/migrate';
+        const res = await api(path, { method: 'POST' });
+        showMessage(
+          el.msg,
+          res.migrated ? `옮긴 항목: ${res.applied.join(', ')}` : '이미 최신 스키마입니다.',
+          'ok',
+        );
+        await refresh().catch(() => {});
+      } catch (err) {
+        showMessage(el.msg, err.message);
+      } finally {
+        el.migrate.disabled = false;
+        el.migrate.textContent = '스키마 업데이트 실행';
       }
     });
 

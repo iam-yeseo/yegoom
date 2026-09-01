@@ -17,7 +17,7 @@
 
     <h1 class="page-title">
       누적 랭킹
-      <span>우승 횟수 순 · 동률이면 평균 오차가 작은 순</span>
+      <span>점수 합계 순 · 동점이면 정확히 맞힌 횟수, 그다음 평균 오차 순</span>
     </h1>
 
     <section class="card">
@@ -30,7 +30,7 @@
     </section>
 
     <section class="card">
-      <div class="card__label">지난 기록</div>
+      <div class="card__label">지난 회차</div>
       <div id="history"><div class="skeleton"></div></div>
     </section>
   </div>
@@ -39,7 +39,7 @@
 
   <script type="module">
     import {
-      api, escapeHtml, formatShortDate, renderTabbar, requireLogin, startClock,
+      api, avatarOf, escapeHtml, formatShortDate, renderTabbar, requireLogin, roundLabel, startClock,
     } from '/js/common.js';
 
     const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
@@ -54,15 +54,16 @@
             .map((r) => {
               const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
               const meta = r.played
-                ? `${r.played}판 · 승률 ${r.winRate}% · 평균 ${r.avgDiffText}`
+                ? `${r.played}회차 참가 · 정확 ${r.exacts}회 · 1등 ${r.wins}회 · 평균 ${r.avgDiffText}`
                 : '아직 참가 기록이 없어요';
               return `<div class="rank">
                 <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
+                <div class="rank__avatar" aria-hidden="true">${avatarOf(r)}</div>
                 <div class="rank__body">
                   <div class="rank__name">${escapeHtml(r.displayName)} ${me}</div>
                   <div class="rank__meta">${escapeHtml(meta)}</div>
                 </div>
-                <div class="rank__wins"><b>${r.wins}</b><span>승</span></div>
+                <div class="rank__wins"><b>${r.score}</b><span>점</span></div>
               </div>`;
             })
             .join('')
@@ -73,19 +74,35 @@
       return history.length
         ? history
             .map((h) => {
-              const winners = h.entries.filter((e) => e.isWinner).map((e) => e.displayName);
-              return `<div class="history-item">
+              const voided = h.status !== 'settled';
+              const head = voided ? '게임 없음' : escapeHtml(roundLabel(h.roundNo));
+              const top = h.entries
+                .filter((e) => e.isWinner)
+                .map((e) => `${e.avatar} ${e.displayName}`);
+              const scored = h.entries
+                .filter((e) => e.score > 0)
+                .map((e) => `${e.displayName} ${e.scoreText}`);
+
+              return `<div class="history-item${voided ? ' history-item--void' : ''}">
                 <div class="history-item__head">
-                  <span class="history-item__date">${escapeHtml(formatShortDate(h.date))}</span>
-                  <span class="history-item__answer">${escapeHtml(h.answer)}</span>
+                  <span class="history-item__date">
+                    ${escapeHtml(formatShortDate(h.date))} · ${head}
+                  </span>
+                  <span class="history-item__answer">${voided ? '—' : escapeHtml(h.answer)}</span>
                 </div>
                 <div class="history-item__winners">${
-                  winners.length ? `🏆 ${escapeHtml(winners.join(', '))}` : '참가자 없음'
+                  voided
+                    ? '정답이 등록되지 않아 회차로 세지 않았어요.'
+                    : top.length
+                      ? `🏆 ${escapeHtml(top.join(', '))}${
+                          scored.length ? ` · ${escapeHtml(scored.join(' / '))}` : ''
+                        }`
+                      : '참가자 없음'
                 }</div>
               </div>`;
             })
             .join('')
-        : '<p class="muted center">아직 공개된 정답이 없어요.</p>';
+        : '<p class="muted center">아직 끝난 회차가 없어요.</p>';
     }
 
     // 네트워크가 끊겨도 스켈레톤만 남지 않도록 실패를 화면에 보여 준다

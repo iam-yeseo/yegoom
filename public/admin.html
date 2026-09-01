@@ -15,6 +15,11 @@
       <div class="clock__time" data-clock-time>--:--</div>
     </header>
 
+    <div class="round-line">
+      <span class="round-badge" id="round-badge">1회차</span>
+      <span class="round-line__note" id="round-note">19:00 마감</span>
+    </div>
+
     <h1 class="page-title">
       정답 등록
       <span id="subtitle">운영자 전용</span>
@@ -23,15 +28,14 @@
     <p id="msg" class="msg hidden" role="alert"></p>
 
     <section class="card">
-      <div class="card__label">오늘 실제 퇴근한 시간</div>
-      <input id="answer-input" class="time-input" type="time" step="60" value="18:00"
-             aria-label="정답 퇴근시간" />
-      <div class="chips" id="chips"></div>
+      <div class="card__label">오늘 실제 퇴근한 시간 · 초까지</div>
+      <input id="answer-input" class="time-input" type="time" step="1" value="18:00:00"
+             aria-label="정답 퇴근시간 (초까지)" />
       <button id="reveal" class="btn" type="button" style="margin-top: 12px">
         정답 공개하기
       </button>
       <p class="muted center" style="font-size: 13px; margin: 10px 0 0">
-        공개하면 오차와 우승자가 바로 확정되고, 모든 참가자에게 예측이 공개됩니다.
+        공개하면 오차와 점수가 바로 확정되고, 회차가 하나 올라갑니다.
       </p>
     </section>
 
@@ -47,8 +51,13 @@
       </p>
     </section>
 
+    <section id="void-box" class="card hidden">
+      <div class="card__label">마감</div>
+      <p style="margin: 0" id="void-text"></p>
+    </section>
+
     <section class="card">
-      <div class="card__label">오늘 제출 현황</div>
+      <div class="card__label">오늘 확정 현황</div>
       <div id="players"><div class="skeleton"></div></div>
     </section>
   </div>
@@ -57,21 +66,22 @@
 
   <script type="module">
     import {
-      api, escapeHtml, initial, renderTabbar, requireLogin, showMessage, startClock,
+      api, avatarOf, escapeHtml, renderTabbar, requireLogin, roundLabel, showMessage, startClock,
     } from '/js/common.js';
 
-    const QUICK_PICKS = ['17:30', '18:00', '18:30', '19:00', '20:00', '21:00'];
-
     const el = {
+      roundBadge: document.getElementById('round-badge'),
+      roundNote: document.getElementById('round-note'),
       subtitle: document.getElementById('subtitle'),
       msg: document.getElementById('msg'),
       input: document.getElementById('answer-input'),
-      chips: document.getElementById('chips'),
       reveal: document.getElementById('reveal'),
       revealedBox: document.getElementById('revealed-box'),
       revealedText: document.getElementById('revealed-text'),
       recalc: document.getElementById('recalc'),
       cancel: document.getElementById('cancel'),
+      voidBox: document.getElementById('void-box'),
+      voidText: document.getElementById('void-text'),
       players: document.getElementById('players'),
     };
 
@@ -79,32 +89,19 @@
     const user = await requireLogin({ adminOnly: true });
     renderTabbar(user);
 
-    el.chips.innerHTML = QUICK_PICKS.map(
-      (t) => `<button class="chip" type="button" data-time="${t}" aria-pressed="false">${t}</button>`,
-    ).join('');
-    el.chips.addEventListener('click', (e) => {
-      const chip = e.target.closest('.chip');
-      if (!chip) return;
-      el.input.value = chip.dataset.time;
-      syncChips();
-    });
-    el.input.addEventListener('input', syncChips);
-
-    function syncChips() {
-      for (const chip of el.chips.querySelectorAll('.chip')) {
-        chip.setAttribute('aria-pressed', String(chip.dataset.time === el.input.value));
-      }
-    }
-
     async function submitAnswer(confirmText) {
       const time = el.input.value;
-      if (!time) return showMessage(el.msg, '정답 시간을 골라 주세요.');
+      if (!time) return showMessage(el.msg, '정답 시간을 입력해 주세요.');
       if (confirmText && !confirm(confirmText.replace('{time}', time))) return;
 
       el.reveal.disabled = true;
       try {
         const res = await api('/api/admin/answer', { method: 'POST', body: { time } });
-        showMessage(el.msg, `정답 ${res.answer} 공개 완료 · 참가자 ${res.participants}명`, 'ok');
+        showMessage(
+          el.msg,
+          `${roundLabel(res.roundNo)} 정답 ${res.answer} 공개 완료 · 참가자 ${res.participants}명`,
+          'ok',
+        );
         await load();
       } catch (err) {
         showMessage(el.msg, err.message);
@@ -117,15 +114,15 @@
       submitAnswer('오늘의 정답을 {time} 로 공개할까요? 공개하면 예측이 모두 드러납니다.'),
     );
     el.recalc.addEventListener('click', () =>
-      submitAnswer('정답을 {time} 로 바꾸고 우승자를 다시 계산할까요?'),
+      submitAnswer('정답을 {time} 로 바꾸고 점수를 다시 계산할까요?'),
     );
 
     el.cancel.addEventListener('click', async () => {
-      if (!confirm('오늘의 정답 공개를 취소할까요? 우승 기록도 함께 되돌아갑니다.')) return;
+      if (!confirm('오늘의 정답 공개를 취소할까요? 점수 기록도 함께 되돌아갑니다.')) return;
       el.cancel.disabled = true;
       try {
         await api('/api/admin/answer', { method: 'DELETE' });
-        showMessage(el.msg, '공개를 취소했습니다. 참가자들이 다시 예측할 수 있어요.', 'ok');
+        showMessage(el.msg, '공개를 취소했습니다.', 'ok');
         await load();
       } catch (err) {
         showMessage(el.msg, err.message);
@@ -138,32 +135,45 @@
       const state = await api('/api/today');
       const submitted = state.players.filter((p) => p.submitted).length;
 
+      el.roundBadge.textContent = roundLabel(state.roundNo);
+      el.roundNote.textContent = state.revealed
+        ? '정답 공개'
+        : state.closed ? '마감됨' : `${state.closesAt} 마감`;
+
       el.subtitle.textContent = state.revealed
         ? '정답 공개됨'
-        : `${submitted}/${state.players.length}명 제출 · 공개 대기 중`;
+        : `${submitted}/${state.players.length}명 확정 · 공개 대기 중`;
 
       el.revealedBox.classList.toggle('hidden', !state.revealed);
       el.reveal.classList.toggle('hidden', state.revealed);
 
+      const pendingVoid = !state.revealed && state.status === 'void';
+      el.voidBox.classList.toggle('hidden', !pendingVoid);
+      if (pendingVoid) {
+        el.voidText.textContent = state.isToday
+          ? `${state.closesAt} 이 지나 예측은 마감됐습니다. 지금 정답을 등록하면 ${roundLabel(state.roundNo)} 로 확정되고, 그냥 두면 오늘은 '게임 없음' 으로 남습니다.`
+          : "정답 없이 끝난 날입니다 (게임 없음).";
+      }
+
       if (state.revealed) {
         el.input.value = state.answer;
         const winners = state.players.filter((p) => p.isWinner).map((p) => p.displayName);
-        el.revealedText.innerHTML = `오늘의 정답은 <b>${escapeHtml(state.answer)}</b> 입니다.<br />
-          우승 · ${winners.length ? escapeHtml(winners.join(', ')) : '없음'}`;
+        el.revealedText.innerHTML = `${escapeHtml(roundLabel(state.roundNo))} 정답은
+          <b>${escapeHtml(state.answer)}</b> 입니다.<br />
+          1등 · ${winners.length ? escapeHtml(winners.join(', ')) : '없음'}`;
       }
-      syncChips();
 
       el.players.innerHTML = state.players
         .map((p) => {
           const meta = state.revealed
-            ? (p.submitted ? `${p.guess} · ${p.diffText}` : '예측 없음')
-            : (p.submitted ? '제출 완료 🔒' : '아직 제출 전');
+            ? (p.submitted ? `${p.guess} · ${p.diffText} · ${p.scoreText}` : '예측 없음')
+            : (p.submitted ? '확정 완료 🔒' : state.closed ? '예측 없음' : '아직 확정 전');
           const value = state.revealed ? (p.isWinner ? '🏆' : '') : (p.submitted ? '✅' : '⏳');
           return `<div class="player${p.isWinner ? ' player--winner' : ''}">
-            <div class="player__avatar" aria-hidden="true">${initial(p.displayName)}</div>
+            <div class="player__avatar" aria-hidden="true">${avatarOf(p)}</div>
             <div class="player__body">
               <div class="player__name">${escapeHtml(p.displayName)}</div>
-              <div class="player__meta">${escapeHtml(meta)} · 누적 ${p.totalWins}승</div>
+              <div class="player__meta">${escapeHtml(meta)} · 누적 ${p.totalScore}점</div>
             </div>
             <div class="player__value">${value}</div>
           </div>`;

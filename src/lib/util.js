@@ -1,4 +1,4 @@
-// 공통 유틸 — Pages Functions 전역에서 사용
+// 공통 유틸 — 라우트 전역에서 사용
 // (밑줄로 시작하는 디렉터리는 라우팅되지 않으므로 API 엔드포인트로 노출되지 않습니다)
 
 export const SESSION_COOKIE = 'toigeun_session';
@@ -23,40 +23,106 @@ export function fail(status, message, extra = {}) {
 
 /* ---------------- 시간 (KST 고정) ---------------- */
 
-const KST_FMT = new Intl.DateTimeFormat('en-CA', {
+const KST_DATE_FMT = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul',
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
 });
 
+const KST_TIME_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Seoul',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
 /** KST 기준 오늘 날짜 (YYYY-MM-DD) */
 export function todayKST(now = new Date()) {
-  return KST_FMT.format(now);
+  return KST_DATE_FMT.format(now);
 }
 
-/** 자정부터의 분 -> "HH:MM" */
-export function minutesToHHMM(m) {
-  if (m === null || m === undefined) return null;
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+/** "YYYY-MM-DD" 에서 days 만큼 옮긴 날짜 */
+export function shiftDate(iso, days) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const moved = new Date(Date.UTC(y, m - 1, d + days));
+  return moved.toISOString().slice(0, 10);
 }
 
-/** "HH:MM" -> 자정부터의 분. 형식이 틀리면 null */
-export function hhmmToMinutes(s) {
-  if (typeof s !== 'string') return null;
-  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(s.trim());
+/** KST 기준 지금이 자정으로부터 몇 초인지 (0 ~ 86399) */
+export function nowSecondsKST(now = new Date()) {
+  // en-GB 24시간 표기는 자정을 "24:00:00" 으로 줄 수 있어 나머지 연산으로 접는다
+  const [h, m, s] = KST_TIME_FMT.format(now).split(':').map(Number);
+  return ((h * 3600 + m * 60 + s) % 86400 + 86400) % 86400;
+}
+
+/** 자정부터의 초 -> "HH:MM:SS" */
+export function secondsToHHMMSS(sec) {
+  if (sec === null || sec === undefined) return null;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
+}
+
+/** "HH:MM" 또는 "HH:MM:SS" -> 자정부터의 초. 형식이 틀리면 null */
+export function hhmmssToSeconds(value) {
+  if (typeof value !== 'string') return null;
+  const m = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(value.trim());
   if (!m) return null;
-  return Number(m[1]) * 60 + Number(m[2]);
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] ?? 0);
 }
 
-/** 입력값을 분 단위 정수로 정규화. 잘못된 값이면 null */
-export function normalizeMinutes(input) {
+/** 입력값을 초 단위 정수로 정규화. 잘못된 값이면 null */
+export function normalizeSeconds(input) {
   if (typeof input === 'number' && Number.isInteger(input)) {
-    return input >= 0 && input <= 1439 ? input : null;
+    return input >= 0 && input <= 86399 ? input : null;
   }
-  return hhmmToMinutes(input);
+  return hhmmssToSeconds(input);
+}
+
+/* ---------------- 프로필 (닉네임 · 아바타) ---------------- */
+
+export const NICKNAME_MAX = 10;
+/** 한글(완성형/자모) · 영문 · 숫자만. 공백과 기호는 받지 않는다. */
+const NICKNAME_RE = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9]+$/u;
+
+/** 눈에 보이는 글자 수 (이모지 한 개는 1글자로 센다) */
+export function graphemeLength(value) {
+  const text = String(value ?? '');
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    return [...new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(text)].length;
+  }
+  return [...text].length; // Segmenter 가 없으면 코드 포인트로 근사
+}
+
+/**
+ * 닉네임을 검사해 다듬는다.
+ * @returns {{ value: string } | { error: string }}
+ */
+export function normalizeNickname(input) {
+  // 맥/iOS 에서 붙여넣은 한글은 자모가 분리된(NFD) 상태로 올 수 있어 먼저 합쳐 준다
+  const value = String(input ?? '').normalize('NFC').trim();
+  if (!value) return { error: '닉네임을 입력해 주세요.' };
+  if (!NICKNAME_RE.test(value)) {
+    return { error: '닉네임은 한글, 영문, 숫자만 쓸 수 있어요.' };
+  }
+  if (graphemeLength(value) > NICKNAME_MAX) {
+    return { error: `닉네임은 ${NICKNAME_MAX}글자까지 가능해요.` };
+  }
+  return { value };
+}
+
+/**
+ * 프로필 글자(아바타)를 검사한다. 딱 한 글자, 이모지도 된다.
+ * @returns {{ value: string } | { error: string }}
+ */
+export function normalizeAvatar(input) {
+  const value = String(input ?? '').normalize('NFC').trim();
+  if (!value) return { error: '프로필에 넣을 글자를 하나 입력해 주세요.' };
+  if (graphemeLength(value) !== 1) return { error: '프로필 글자는 딱 한 글자만 넣을 수 있어요.' };
+  return { value };
 }
 
 /* ---------------- 비밀번호 해싱 (PBKDF2-SHA256) ---------------- */
@@ -129,15 +195,23 @@ export function clearCookie(request) {
 export async function getUser(context) {
   const token = readCookie(context.request, SESSION_COOKIE);
   if (!token) return null;
+  // u.* 로 받는 이유: avatar 컬럼이 아직 없는 예전 DB 에서도 로그인은 되어야
+  // 운영자가 /api/migrate 로 스키마를 옮길 수 있다.
   const row = await context.env.DB.prepare(
-    `SELECT u.id, u.username, u.display_name, u.role, s.expires_at
+    `SELECT u.*, s.expires_at
        FROM sessions s JOIN users u ON u.id = s.user_id
       WHERE s.token = ? AND s.expires_at > datetime('now')`,
   )
     .bind(token)
     .first();
   if (!row) return null;
-  return { id: row.id, username: row.username, displayName: row.display_name, role: row.role };
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatar: row.avatar ?? '🙂',
+    role: row.role,
+  };
 }
 
 /** 로그인 필수 라우트용. 미로그인이면 401 Response 를 반환 */

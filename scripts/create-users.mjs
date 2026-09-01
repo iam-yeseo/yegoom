@@ -18,11 +18,12 @@ if (!token) {
   exit(1);
 }
 
+// 닉네임은 한글/영문/숫자 10글자 이내, 프로필은 한 글자(이모지 가능)
 const DEFAULTS = [
-  { username: 'player1', displayName: '플레이어 1', role: 'player' },
-  { username: 'player2', displayName: '플레이어 2', role: 'player' },
-  { username: 'player3', displayName: '플레이어 3', role: 'player' },
-  { username: 'admin', displayName: '운영자', role: 'admin' },
+  { username: 'player1', displayName: '플레이어1', avatar: '🐣', role: 'player' },
+  { username: 'player2', displayName: '플레이어2', avatar: '🐤', role: 'player' },
+  { username: 'player3', displayName: '플레이어3', avatar: '🐥', role: 'player' },
+  { username: 'admin', displayName: '운영자', avatar: '🔑', role: 'admin' },
 ];
 
 const rl = createInterface({ input: stdin, output: stdout });
@@ -36,7 +37,11 @@ for (const d of DEFAULTS) {
   console.log(`── ${label} (${d.username})`);
 
   const username = (await rl.question(`  아이디 (${d.username}): `)).trim() || d.username;
-  const displayName = (await rl.question(`  표시 이름 (${d.displayName}): `)).trim() || d.displayName;
+  const displayName =
+    (await rl.question(`  닉네임 · 한글/영문/숫자 10글자 이내 (${d.displayName}): `)).trim() ||
+    d.displayName;
+  const avatar =
+    (await rl.question(`  프로필 글자 · 한 글자, 이모지 가능 (${d.avatar}): `)).trim() || d.avatar;
 
   let password = '';
   while (password.length < 3) {
@@ -44,7 +49,7 @@ for (const d of DEFAULTS) {
     if (password.length < 3) console.log('  ! 3자 이상 입력해 주세요.');
   }
 
-  users.push({ username, displayName, role: d.role, password });
+  users.push({ username, displayName, avatar, role: d.role, password });
   console.log('');
 }
 
@@ -65,6 +70,8 @@ if (!res.ok) {
 
 console.log('\n✅ 계정 준비 완료');
 for (const u of data.users) {
-  console.log(`   ${u.role === 'admin' ? '운영자  ' : '플레이어'} ${u.username} — ${u.displayName}`);
+  console.log(
+    `   ${u.role === 'admin' ? '운영자  ' : '플레이어'} ${u.username} — ${u.avatar} ${u.displayName}`,
+  );
 }
 console.log(`\n${baseUrl}/login 에서 로그인해 보세요.\n`);
