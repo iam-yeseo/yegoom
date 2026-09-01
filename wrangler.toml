@@ -12,4 +12,4 @@ directory = "./public"
 [[d1_databases]]
 binding = "DB"
 database_name = "toigeun-db"
-database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"
+database_id = "1eb1504a-17c3-4569-9015-7057694df309"
