@@ -82,7 +82,7 @@ const TABS = [
   { href: '/', icon: '🎯', label: '오늘의 게임' },
   { href: '/ranking', icon: '🏆', label: '랭킹' },
   { href: '/admin', icon: '🔑', label: '정답 등록', adminOnly: true },
-  { href: '/account', icon: '👤', label: '내 계정' },
+  { href: '/account', icon: '👤', label: '내 프로필' },
 ];
 
 export function renderTabbar(user) {
@@ -143,7 +143,26 @@ export function showMessage(el, text, kind = 'error') {
   el.classList.toggle('hidden', !text);
 }
 
-/** 이름의 첫 글자로 아바타를 만든다 */
-export function initial(name) {
-  return escapeHtml(String(name ?? '?').trim().charAt(0) || '?');
+/**
+ * 프로필 자리에 넣을 한 글자.
+ * 사용자가 정해 둔 avatar 를 쓰고, 없으면 닉네임 첫 글자로 대신한다.
+ */
+export function avatarOf(person) {
+  // avatar 는 서버에서 이미 "한 글자" 로 검사해 저장하므로 그대로 쓴다
+  const avatar = String(person?.avatar ?? '').trim();
+  if (avatar) return escapeHtml(avatar);
+  const name = String(person?.displayName ?? person ?? '?').trim();
+  return escapeHtml([...name][0] ?? '?');
+}
+
+/** "18:00:00" -> "18:00:00" / "18:00" (초가 0이면 짧게) */
+export function formatTime(value, { seconds = true } = {}) {
+  if (!value) return '—';
+  const [h, m, s = '00'] = String(value).split(':');
+  return seconds || s !== '00' ? `${h}:${m}:${s}` : `${h}:${m}`;
+}
+
+/** 회차 표기 — "12회차" */
+export function roundLabel(no) {
+  return `${no ?? 1}회차`;
 }

@@ -15,6 +15,11 @@
       <div class="clock__time" data-clock-time>--:--</div>
     </header>
 
+    <div class="round-line">
+      <span class="round-badge" id="round-badge">1회차</span>
+      <span class="round-line__note" id="round-note">19:00 마감</span>
+    </div>
+
     <h1 class="page-title">
       오늘의 퇴근시간
       <span id="subtitle">불러오는 중…</span>
@@ -25,21 +30,27 @@
     <!-- 정답 공개 영역 -->
     <section id="answer-box" class="answer hidden">
       <div class="answer__label">오늘의 정답</div>
-      <div class="answer__time" id="answer-time">--:--</div>
+      <div class="answer__time" id="answer-time">--:--:--</div>
       <div class="muted" id="answer-note"></div>
+    </section>
+
+    <!-- 마감 안내 (정답 없이 끝난 날) -->
+    <section id="closed-box" class="card hidden">
+      <div class="card__label">마감</div>
+      <p id="closed-text" style="margin: 0"></p>
     </section>
 
     <!-- 예측 입력 (플레이어 전용) -->
     <section id="guess-box" class="card hidden">
-      <div class="card__label">내 예측</div>
-      <input id="guess-input" class="time-input" type="time" step="60" value="18:00"
-             aria-label="예측 퇴근시간" />
-      <div class="chips" id="chips"></div>
+      <div class="card__label">내 예측 · 초까지</div>
+      <input id="guess-input" class="time-input" type="time" step="1" value="18:00:00"
+             aria-label="예측 퇴근시간 (초까지)" />
+      <div class="chips chips--single" id="chips"></div>
       <button id="guess-submit" class="btn" type="button" style="margin-top: 12px">
-        예측 제출하기
+        확정하기
       </button>
       <p class="muted center" style="font-size: 13px; margin: 10px 0 0">
-        정답이 공개되기 전까지 몇 번이든 바꿀 수 있어요.
+        <span id="guess-hint">19:00 마감 전까지 몇 번이든 바꿀 수 있어요.</span>
       </p>
     </section>
 
@@ -61,26 +72,45 @@
         <div class="skeleton" style="width: 85%"></div>
       </div>
     </section>
+
+    <!-- 점수 안내 -->
+    <section class="card">
+      <div class="card__label">점수</div>
+      <ul class="rules">
+        <li><b>+3점</b> 초까지 정확히 맞힘</li>
+        <li><b>+2점</b> 60초 이내</li>
+        <li><b>+1점</b> 120초 이내</li>
+        <li><b>0점</b> 그 외</li>
+      </ul>
+      <p class="muted" style="font-size: 13px; margin: 10px 0 0">
+        동점이어도 각자 같은 기준으로 점수를 받아요.
+      </p>
+    </section>
   </div>
 
   <nav class="tabbar" data-tabbar aria-label="주요 메뉴"></nav>
 
   <script type="module">
     import {
-      api, escapeHtml, initial, renderTabbar, requireLogin, showMessage, startClock,
+      api, avatarOf, escapeHtml, renderTabbar, requireLogin, roundLabel, showMessage, startClock,
     } from '/js/common.js';
 
-    const QUICK_PICKS = ['17:30', '18:00', '18:30', '19:00', '20:00', '21:00'];
+    const DEFAULT_TIME = '18:00:00';
 
     const el = {
+      roundBadge: document.getElementById('round-badge'),
+      roundNote: document.getElementById('round-note'),
       subtitle: document.getElementById('subtitle'),
       msg: document.getElementById('msg'),
       answerBox: document.getElementById('answer-box'),
       answerTime: document.getElementById('answer-time'),
       answerNote: document.getElementById('answer-note'),
+      closedBox: document.getElementById('closed-box'),
+      closedText: document.getElementById('closed-text'),
       guessBox: document.getElementById('guess-box'),
       guessInput: document.getElementById('guess-input'),
       guessSubmit: document.getElementById('guess-submit'),
+      guessHint: document.getElementById('guess-hint'),
       chips: document.getElementById('chips'),
       adminBox: document.getElementById('admin-box'),
       players: document.getElementById('players'),
@@ -91,10 +121,11 @@
     const user = await requireLogin();
     renderTabbar(user);
 
-    // 빠른 선택 칩
-    el.chips.innerHTML = QUICK_PICKS.map(
-      (t) => `<button class="chip" type="button" data-time="${t}" aria-pressed="false">${t}</button>`,
-    ).join('');
+    // 프리셋은 기본값 하나만 남긴다
+    el.chips.innerHTML =
+      `<button class="chip" type="button" data-time="${DEFAULT_TIME}" aria-pressed="false">
+         기본값 18:00
+       </button>`;
     el.chips.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if (!chip) return;
@@ -114,13 +145,15 @@
       if (!time) return showMessage(el.msg, '예측할 시간을 골라 주세요.');
 
       el.guessSubmit.disabled = true;
-      el.guessSubmit.textContent = '제출 중…';
+      const label = el.guessSubmit.textContent;
+      el.guessSubmit.textContent = '확정 중…';
       try {
-        await api('/api/guess', { method: 'POST', body: { time } });
-        showMessage(el.msg, `${time} 로 예측을 제출했어요.`, 'ok');
+        const res = await api('/api/guess', { method: 'POST', body: { time } });
+        showMessage(el.msg, `${res.guess} 로 확정했어요.`, 'ok');
         await load();
       } catch (err) {
         showMessage(el.msg, err.message);
+        el.guessSubmit.textContent = label;
       } finally {
         el.guessSubmit.disabled = false;
       }
@@ -130,15 +163,22 @@
       const state = await api('/api/today');
       const isPlayer = user.role === 'player';
 
+      el.roundBadge.textContent = roundLabel(state.roundNo);
+      el.roundNote.textContent = state.revealed
+        ? '정답 공개'
+        : state.closed ? '마감됨' : `${state.closesAt} 마감`;
+
       // 헤더 문구
       if (state.revealed) {
         const winners = state.players.filter((p) => p.isWinner);
         el.subtitle.textContent = winners.length
-          ? `오늘의 우승 · ${winners.map((w) => w.displayName).join(', ')}`
+          ? `오늘의 1등 · ${winners.map((w) => w.displayName).join(', ')}`
           : '정답이 공개됐어요 (참가자 없음)';
+      } else if (state.status === 'void') {
+        el.subtitle.textContent = '게임 없음 · 회차는 올라가지 않아요';
       } else {
         const done = state.players.filter((p) => p.submitted).length;
-        el.subtitle.textContent = `정답 공개 대기 중 · ${done}/${state.players.length}명 제출`;
+        el.subtitle.textContent = `정답 공개 대기 중 · ${done}/${state.players.length}명 확정`;
       }
 
       // 정답 카드
@@ -147,21 +187,28 @@
         el.answerTime.textContent = state.answer;
         const me = state.players.find((p) => p.isMe);
         el.answerNote.textContent = me?.diffText
-          ? `내 예측 ${me.guess} · ${me.diffText}`
+          ? `내 예측 ${me.guess} · ${me.diffText} · ${me.scoreText}`
           : '';
       }
 
+      // 마감 안내 (정답 없이 끝난 날)
+      const voided = state.status === 'void';
+      el.closedBox.classList.toggle('hidden', !voided);
+      if (voided) {
+        el.closedText.textContent = state.isToday
+          ? `${state.closesAt} 이 지나 오늘 게임은 마감됐어요. 운영자가 정답을 등록하지 않으면 그날은 '게임 없음' 으로 남고 회차도 올라가지 않아요.`
+          : '정답 없이 끝난 날이에요 (게임 없음).';
+      }
+
       // 입력 카드 / 운영자 카드
-      el.guessBox.classList.toggle('hidden', !isPlayer || state.revealed);
+      const canGuess = isPlayer && !state.closed;
+      el.guessBox.classList.toggle('hidden', !canGuess);
       el.adminBox.classList.toggle('hidden', user.role !== 'admin' || state.revealed);
 
-      if (isPlayer && !state.revealed) {
-        if (state.myGuess) {
-          el.guessInput.value = state.myGuess;
-          el.guessSubmit.textContent = '예측 수정하기';
-        } else {
-          el.guessSubmit.textContent = '예측 제출하기';
-        }
+      if (canGuess) {
+        el.guessInput.value = state.myGuess ?? DEFAULT_TIME;
+        el.guessSubmit.textContent = state.myGuess ? '다시 확정하기' : '확정하기';
+        el.guessHint.textContent = `${state.closesAt} 마감 전까지 몇 번이든 바꿀 수 있어요.`;
         syncChips();
       }
 
@@ -172,20 +219,20 @@
           const winner = p.isWinner ? ' player--winner' : '';
           const tags =
             (p.isMe ? '<span class="tag tag--me">나</span>' : '') +
-            (p.isWinner ? '<span class="tag tag--win">우승 🏆</span>' : '');
+            (p.isWinner ? '<span class="tag tag--win">1등 🏆</span>' : '');
 
           let meta;
-          if (state.revealed) meta = p.submitted ? p.diffText : '예측 없음';
-          else if (p.submitted) meta = p.isMe ? `내 예측 ${p.guess}` : '제출 완료 🔒';
-          else meta = '아직 제출 전';
+          if (state.revealed) meta = p.submitted ? `${p.diffText} · ${p.scoreText}` : '예측 없음';
+          else if (p.submitted) meta = p.isMe ? `내 예측 ${p.guess}` : '확정 완료 🔒';
+          else meta = state.closed ? '예측 없음' : '아직 확정 전';
 
           const value = state.revealed || p.isMe ? (p.guess ?? '—') : '···';
 
           return `<div class="player${winner}">
-            <div class="player__avatar" aria-hidden="true">${initial(p.displayName)}</div>
+            <div class="player__avatar" aria-hidden="true">${avatarOf(p)}</div>
             <div class="player__body">
               <div class="player__name">${escapeHtml(p.displayName)}${tags}</div>
-              <div class="player__meta">${escapeHtml(meta)} · 누적 ${p.totalWins}승</div>
+              <div class="player__meta">${escapeHtml(meta)} · 누적 ${p.totalScore}점</div>
             </div>
             <div class="player__value">${escapeHtml(value)}</div>
           </div>`;
@@ -202,7 +249,7 @@
       el.players.innerHTML = '<p class="muted center">잠시 후 다시 시도합니다.</p>';
     }
 
-    // 다른 참가자의 제출이나 정답 공개를 반영하기 위해 주기적으로 새로고침
+    // 다른 참가자의 확정이나 정답 공개를 반영하기 위해 주기적으로 새로고침
     // (실패했더라도 계속 돌면서 연결이 돌아오면 알아서 복구된다)
     setInterval(() => { if (!document.hidden) load().catch(() => {}); }, 20000);
     document.addEventListener('visibilitychange', () => {

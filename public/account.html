@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0d1020" />
-  <title>내 계정 · 퇴근시간 맞히기</title>
+  <title>내 프로필 · 퇴근시간 맞히기</title>
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
 </head>
@@ -16,11 +16,40 @@
     </header>
 
     <h1 class="page-title">
-      내 계정
+      내 프로필
       <span id="subtitle">&nbsp;</span>
     </h1>
 
     <p id="msg" class="msg hidden" role="alert"></p>
+
+    <section class="card">
+      <div class="card__label">닉네임 · 프로필</div>
+
+      <div class="profile-preview">
+        <div class="profile-preview__avatar" id="preview-avatar" aria-hidden="true">🙂</div>
+        <div>
+          <div class="profile-preview__name" id="preview-name">&nbsp;</div>
+          <div class="muted" style="font-size: 13px">참가자 목록에 이렇게 보여요</div>
+        </div>
+      </div>
+
+      <form id="profile-form">
+        <label class="field">
+          <span>닉네임 · 한글/영문/숫자 10글자 이내</span>
+          <input id="nickname" type="text" maxlength="10" autocomplete="nickname"
+                 inputmode="text" required />
+        </label>
+
+        <label class="field">
+          <span>프로필 글자 · 한 글자 (이모지 가능)</span>
+          <input id="avatar" class="avatar-input" type="text" maxlength="8" required />
+        </label>
+
+        <div class="chips chips--emoji" id="emoji-picks"></div>
+
+        <button class="btn" type="submit" style="margin-top: 12px">프로필 저장</button>
+      </form>
+    </section>
 
     <section class="card">
       <div class="card__label">비밀번호 변경</div>
@@ -33,7 +62,7 @@
           <span>새 비밀번호 (3자 이상)</span>
           <input id="next" type="password" autocomplete="new-password" minlength="3" required />
         </label>
-        <button class="btn" type="submit">비밀번호 변경</button>
+        <button class="btn btn--ghost" type="submit">비밀번호 변경</button>
       </form>
     </section>
 
@@ -45,19 +74,94 @@
   <nav class="tabbar" data-tabbar aria-label="주요 메뉴"></nav>
 
   <script type="module">
-    import { api, escapeHtml, renderTabbar, requireLogin, showMessage, startClock } from '/js/common.js';
+    import { api, renderTabbar, requireLogin, showMessage, startClock } from '/js/common.js';
+
+    const EMOJI_PICKS = ['🐣', '🐤', '🐥', '🦊', '🐼', '🐧', '🍀', '⭐', '🔥', '🌙', '🍜', '🕕'];
+    const NICKNAME_RE = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9]+$/u;
+
+    const el = {
+      msg: document.getElementById('msg'),
+      subtitle: document.getElementById('subtitle'),
+      previewAvatar: document.getElementById('preview-avatar'),
+      previewName: document.getElementById('preview-name'),
+      nickname: document.getElementById('nickname'),
+      avatar: document.getElementById('avatar'),
+      picks: document.getElementById('emoji-picks'),
+      profileForm: document.getElementById('profile-form'),
+    };
 
     startClock();
     const user = await requireLogin();
     renderTabbar(user);
 
-    document.getElementById('subtitle').textContent =
-      `${user.displayName} · ${user.username} · ${user.role === 'admin' ? '운영자' : '플레이어'}`;
+    /** 이모지 한 개는 1글자로 센다 */
+    const segmenter = 'Segmenter' in Intl
+      ? new Intl.Segmenter('ko', { granularity: 'grapheme' })
+      : null;
+
+    function graphemes(text) {
+      return segmenter ? [...segmenter.segment(text)].map((s) => s.segment) : [...text];
+    }
+
+    el.subtitle.textContent =
+      `${user.username} · ${user.role === 'admin' ? '운영자' : '플레이어'}`;
+    el.nickname.value = user.displayName;
+    el.avatar.value = user.avatar ?? '🙂';
+    syncPreview();
+
+    el.picks.innerHTML = EMOJI_PICKS.map(
+      (e) => `<button class="chip" type="button" data-emoji="${e}">${e}</button>`,
+    ).join('');
+    el.picks.addEventListener('click', (e) => {
+      const chip = e.target.closest('.chip');
+      if (!chip) return;
+      el.avatar.value = chip.dataset.emoji;
+      syncPreview();
+    });
+
+    el.nickname.addEventListener('input', syncPreview);
+    el.avatar.addEventListener('input', syncPreview);
+
+    function syncPreview() {
+      const parts = graphemes(el.avatar.value.trim());
+      el.previewAvatar.textContent = parts[0] ?? '🙂';
+      el.previewName.textContent = el.nickname.value.trim() || '닉네임';
+      for (const chip of el.picks.querySelectorAll('.chip')) {
+        chip.setAttribute('aria-pressed', String(chip.dataset.emoji === el.avatar.value.trim()));
+      }
+    }
+
+    el.profileForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      // 맥/iOS 에서 붙여넣은 한글은 자모가 분리돼 올 수 있어 서버와 같게 NFC 로 맞춘다
+      const displayName = el.nickname.value.normalize('NFC').trim();
+      const avatar = el.avatar.value.normalize('NFC').trim();
+
+      // 서버에서도 같은 규칙으로 검사하지만, 먼저 알려 주면 덜 답답하다
+      if (!NICKNAME_RE.test(displayName)) {
+        return showMessage(el.msg, '닉네임은 한글, 영문, 숫자만 쓸 수 있어요.');
+      }
+      if (graphemes(displayName).length > 10) {
+        return showMessage(el.msg, '닉네임은 10글자까지 가능해요.');
+      }
+      if (graphemes(avatar).length !== 1) {
+        return showMessage(el.msg, '프로필 글자는 딱 한 글자만 넣을 수 있어요.');
+      }
+
+      try {
+        const res = await api('/api/profile', { method: 'POST', body: { displayName, avatar } });
+        el.nickname.value = res.user.displayName;
+        el.avatar.value = res.user.avatar;
+        syncPreview();
+        showMessage(el.msg, '프로필을 저장했어요.', 'ok');
+      } catch (err) {
+        showMessage(el.msg, err.message);
+      }
+    });
 
     document.getElementById('pw-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const msg = document.getElementById('msg');
-      showMessage(msg, '');
+      showMessage(el.msg, '');
       try {
         const res = await api('/api/password', {
           method: 'POST',
@@ -66,10 +170,10 @@
             newPassword: document.getElementById('next').value,
           },
         });
-        showMessage(msg, res.message, 'ok');
+        showMessage(el.msg, res.message, 'ok');
         setTimeout(() => location.replace('/login'), 1200);
       } catch (err) {
-        showMessage(msg, err.message);
+        showMessage(el.msg, err.message);
       }
     });
 

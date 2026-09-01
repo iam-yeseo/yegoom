@@ -225,6 +225,13 @@ input[type='time'], input[type='date'] {
   margin: 12px 0 4px;
 }
 
+/* 기본값 하나만 남긴 프리셋 */
+.chips--single { grid-template-columns: 1fr; }
+
+/* 프로필 이모지 고르기 */
+.chips--emoji { grid-template-columns: repeat(6, 1fr); }
+.chips--emoji .chip { font-size: 20px; padding: 8px 0; }
+
 .chip {
   padding: 10px 8px;
   font-size: 14px;
@@ -243,6 +250,76 @@ input[type='time'], input[type='date'] {
   color: #241203;
   background: linear-gradient(120deg, var(--accent-2), var(--accent));
   border-color: transparent;
+}
+
+/* ---------- 회차 표시 ---------- */
+
+.round-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+
+.round-badge {
+  padding: 4px 11px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #241203;
+  background: linear-gradient(120deg, var(--accent-2), var(--accent));
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.round-line__note { font-size: 13px; color: var(--muted); }
+
+/* ---------- 점수 안내 ---------- */
+
+.rules { margin: 0; padding: 0; list-style: none; }
+
+.rules li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 14px;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.rules li:first-child { border-top: none; padding-top: 0; }
+.rules b { flex: 0 0 46px; color: var(--accent-2); font-variant-numeric: tabular-nums; }
+
+/* ---------- 프로필 편집 ---------- */
+
+.profile-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-preview__avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  font-size: 28px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.profile-preview__name { font-size: 17px; font-weight: 800; }
+
+.avatar-input {
+  text-align: center;
+  font-size: 24px !important;
+  padding: 12px !important;
 }
 
 /* ---------- 알림 메시지 ---------- */
@@ -277,7 +354,7 @@ input[type='time'], input[type='date'] {
   place-items: center;
   width: 42px;
   height: 42px;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 800;
   color: var(--text);
   background: var(--surface-2);
@@ -360,7 +437,19 @@ input[type='time'], input[type='date'] {
 
 .rank:first-of-type { border-top: none; padding-top: 2px; }
 
-.rank__medal { flex: 0 0 34px; font-size: 22px; text-align: center; font-weight: 800; color: var(--muted); }
+.rank__medal { flex: 0 0 30px; font-size: 22px; text-align: center; font-weight: 800; color: var(--muted); }
+
+.rank__avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
 .rank__body { flex: 1 1 auto; min-width: 0; }
 .rank__name { font-weight: 700; font-size: 16px; }
 .rank__meta { font-size: 13px; color: var(--muted); }
@@ -376,6 +465,7 @@ input[type='time'], input[type='date'] {
 .history-item__date { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .history-item__answer { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .history-item__winners { margin-top: 3px; font-size: 13px; color: var(--muted); }
+.history-item--void { opacity: 0.6; }
 
 /* ---------- 하단 탭바 ---------- */
 
@@ -455,4 +545,5 @@ input[type='time'], input[type='date'] {
 /* 아주 좁은 화면(320px 대)에서 칩 글자가 넘치지 않게 */
 @media (max-width: 360px) {
   .chip { font-size: 13px; padding: 10px 4px; }
+  .rank__meta { font-size: 12px; }
 }

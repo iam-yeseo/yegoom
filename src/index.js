@@ -11,7 +11,9 @@ import * as history from './routes/history.js';
 import * as login from './routes/login.js';
 import * as logout from './routes/logout.js';
 import * as me from './routes/me.js';
+import * as migrate from './routes/migrate.js';
 import * as password from './routes/password.js';
+import * as profile from './routes/profile.js';
 import * as ranking from './routes/ranking.js';
 import * as setup from './routes/setup.js';
 import * as today from './routes/today.js';
@@ -26,9 +28,11 @@ const ROUTES = new Map([
   ['/api/ranking', ranking],
   ['/api/history', history],
   ['/api/password', password],
+  ['/api/profile', profile],
   ['/api/setup', setup],
   ['/api/admin/answer', adminAnswer],
   ['/api/bootstrap', bootstrap],
+  ['/api/migrate', migrate],
 ]);
 
 // 라우트 모듈은 onRequestGet / onRequestPost / onRequestDelete 를 내보낸다.

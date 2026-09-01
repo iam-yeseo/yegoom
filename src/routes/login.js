@@ -10,9 +10,9 @@ export async function onRequestPost(context) {
     return fail(400, '아이디와 비밀번호를 모두 입력해 주세요.');
   }
 
+  // avatar 컬럼이 없는 예전 DB 에서도 로그인은 되어야 스키마를 옮길 수 있어 u.* 로 받는다
   const user = await context.env.DB.prepare(
-    `SELECT id, username, display_name, role, password_hash, password_salt
-       FROM users WHERE username = ?`,
+    `SELECT * FROM users WHERE username = ?`,
   )
     .bind(username.trim().toLowerCase())
     .first();
@@ -38,7 +38,13 @@ export async function onRequestPost(context) {
   return json(
     {
       ok: true,
-      user: { id: user.id, username: user.username, displayName: user.display_name, role: user.role },
+      user: {
+        id: user.id,
+        username: user.username,
+        displayName: user.display_name,
+        avatar: user.avatar ?? '🙂',
+        role: user.role,
+      },
     },
     { headers: { 'set-cookie': sessionCookie(token, context.request) } },
   );

@@ -5,29 +5,33 @@ export const SEED_USERS = [
   {
     "username": "yeseo",
     "displayName": "yeseo",
+    "avatar": "🐣",
     "role": "player",
-    "hash": "aeef0a1d54052939433e33cbc62b5a0215af2c294fbc7242247161294d000359",
-    "salt": "7e6d5a3252d559578a875e357afa7943"
+    "hash": "b7b73c692ddc1c07c2b3a5d9a09ec5ae6d9a52c83d0973052140c43eb6469c2a",
+    "salt": "90bed330c60cdf180aa1e1ef738b99b7"
   },
   {
     "username": "min",
     "displayName": "min",
+    "avatar": "🐤",
     "role": "player",
-    "hash": "f7ec1cb99bb7f0e7dc8d9f0e925434db04731295d1321fbbb14cfd314432779b",
-    "salt": "ec8036a9985e3fa7f9326b616f04e669"
+    "hash": "cc4f07eff687ddea6d329a4f73f7db6f7861c34ee8d3cb050ed0847f2006d0a2",
+    "salt": "489d6a0360690fb3d412124cb9848b1b"
   },
   {
     "username": "bin",
     "displayName": "bin",
+    "avatar": "🐥",
     "role": "player",
-    "hash": "ad98d52d6de433267f2bd560922dc23383657c0c13118821fc81e152f279f4ae",
-    "salt": "b4b347f40f2d6904d98af448fc44c256"
+    "hash": "3a3a17f2280249ed379da9cb832c37a9ab0d65c64f26eef62c27bafab7e31b62",
+    "salt": "adc45380590a37eaac97eed79471dc17"
   },
   {
     "username": "siwon",
     "displayName": "siwon",
+    "avatar": "🔑",
     "role": "admin",
-    "hash": "c5bd2aa4c0d47b98c80a3f36c4c8fbe16b30fe7898be4ec83a75c63300d0965b",
-    "salt": "7832a75fa08ac46d87759196acee2a75"
+    "hash": "0ed320a911d78162f4f141fb32163579293d237566e985e102803edc42aefcde",
+    "salt": "455f0f6165255ea777ccc391de266cf6"
   }
 ];

@@ -1,5 +1,5 @@
-import { fail, json, readCookie, SESSION_COOKIE, timingSafeEqual } from '../lib/util.js';
-import { SCHEMA_STATEMENTS } from '../lib/schema.js';
+import { fail, json, timingSafeEqual } from '../lib/util.js';
+import { migrate } from '../lib/migrate.js';
 import { SEED_USERS } from '../lib/seed.js';
 
 /**
@@ -41,19 +41,19 @@ export async function onRequestPost(context) {
     });
   }
 
-  // 1. 테이블 (이미 있으면 그대로 둔다)
-  await db.batch(SCHEMA_STATEMENTS.map((sql) => db.prepare(sql)));
+  // 1. 테이블 (이미 있으면 그대로 두고, 예전 스키마면 새 모양으로 옮긴다)
+  await migrate(db);
 
   // 2. 계정
   await db.batch(
     SEED_USERS.map((u) =>
       db
         .prepare(
-          `INSERT INTO users (username, display_name, role, password_hash, password_salt)
-           VALUES (?, ?, ?, ?, ?)
+          `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(username) DO NOTHING`,
         )
-        .bind(u.username, u.displayName, u.role, u.hash, u.salt),
+        .bind(u.username, u.displayName, u.avatar, u.role, u.hash, u.salt),
     ),
   );
 
@@ -64,12 +64,12 @@ export async function onRequestPost(context) {
 /** users 테이블이 아직 없을 수도 있으므로 조회 실패를 "설정 전"으로 본다. */
 async function readStatus(db) {
   try {
-    const { results } = await db
-      .prepare(`SELECT username, display_name, role FROM users ORDER BY id`)
-      .all();
+    // avatar 컬럼이 없는 예전 DB 도 상태만은 읽을 수 있게 한다
+    const { results } = await db.prepare(`SELECT * FROM users ORDER BY id`).all();
     const users = (results ?? []).map((u) => ({
       username: u.username,
       displayName: u.display_name,
+      avatar: u.avatar ?? '🙂',
       role: u.role,
     }));
     return { ready: users.length > 0, userCount: users.length, users };
