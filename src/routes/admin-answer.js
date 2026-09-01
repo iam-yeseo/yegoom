@@ -1,5 +1,5 @@
-import { fail, json, normalizeMinutes, readJson, requireAdmin, todayKST } from '../../_lib/util.js';
-import { settleRound } from '../../_lib/game.js';
+import { fail, json, normalizeMinutes, readJson, requireAdmin, todayKST } from '../lib/util.js';
+import { settleRound } from '../lib/game.js';
 
 /** 운영자가 오늘(또는 지정 날짜)의 정답을 등록하고 라운드를 확정한다. */
 export async function onRequestPost(context) {

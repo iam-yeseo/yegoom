@@ -1,4 +1,4 @@
-import { fail, json, minutesToHHMM, normalizeMinutes, readJson, requireUser, todayKST } from '../_lib/util.js';
+import { fail, json, minutesToHHMM, normalizeMinutes, readJson, requireUser, todayKST } from '../lib/util.js';
 
 /** 플레이어가 오늘의 퇴근시간을 예측한다. 정답 공개 전까지는 수정 가능. */
 export async function onRequestPost(context) {

@@ -1,4 +1,4 @@
-import { fail, hashPassword, json, readJson, timingSafeEqual } from '../_lib/util.js';
+import { fail, hashPassword, json, readJson, timingSafeEqual } from '../lib/util.js';
 
 /**
  * 계정 생성 / 비밀번호 재설정용 관리 엔드포인트.

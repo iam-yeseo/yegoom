@@ -1,6 +1,11 @@
 name = "toigeun-game"
+main = "src/index.js"
 compatibility_date = "2026-09-01"
-pages_build_output_dir = "public"
+
+# public/ 의 정적 파일을 먼저 서빙하고, 매칭되지 않는 요청(/api/*)만 Worker 로 넘긴다.
+# html_handling 기본값 덕분에 /login 은 public/login.html 로, / 는 index.html 로 이어진다.
+[assets]
+directory = "./public"
 
 # D1 데이터베이스 바인딩.
 # `npx wrangler d1 create toigeun-db` 로 만든 뒤 출력된 database_id 를 아래에 붙여넣으세요.

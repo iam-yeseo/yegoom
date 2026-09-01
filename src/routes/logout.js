@@ -1,4 +1,4 @@
-import { clearCookie, json, readCookie, SESSION_COOKIE } from '../_lib/util.js';
+import { clearCookie, json, readCookie, SESSION_COOKIE } from '../lib/util.js';
 
 export async function onRequestPost(context) {
   const token = readCookie(context.request, SESSION_COOKIE);

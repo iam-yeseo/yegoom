@@ -3,7 +3,7 @@
 플레이어 3명이 운영자 1명의 **오늘 퇴근시간**을 맞히는 모바일 웹 게임.
 정답과 가장 가까운 시간을 부른 사람이 우승하고, 우승 횟수가 누적돼 랭킹에 반영됩니다.
 
-Cloudflare **Pages + Pages Functions + D1** 로만 동작합니다. 전부 무료 티어 안에서 돌아가고,
+Cloudflare **Workers (정적 에셋) + D1** 로만 동작합니다. 전부 무료 티어 안에서 돌아가고,
 빌드 도구 없이 순수 HTML / CSS / JS 로 되어 있습니다.
 
 ---
@@ -68,7 +68,11 @@ npm run db:init
 npm run deploy
 ```
 
-처음 배포하면 `https://<프로젝트이름>.pages.dev` 주소가 나옵니다.
+처음 배포하면 `https://<프로젝트이름>.<계정>.workers.dev` 주소가 나옵니다.
+
+GitHub 저장소를 Cloudflare 대시보드에 연결해 두었다면 푸시할 때마다 자동 배포됩니다.
+이때 실행되는 기본 배포 명령이 `npx wrangler deploy` 인데, 이 저장소가 바로 그 형태라
+빌드 설정을 따로 만질 필요가 없습니다. (D1 바인딩은 `wrangler.toml` 에서 읽어 갑니다.)
 
 ### 4. 계정 만들기
 
@@ -108,7 +112,7 @@ npm run db:seed
 아무나 못 쓰도록 토큰을 먼저 걸어 둡니다.
 
 ```bash
-npx wrangler pages secret put SETUP_TOKEN     # 아무 긴 랜덤 문자열
+npx wrangler secret put SETUP_TOKEN     # 아무 긴 랜덤 문자열
 SETUP_TOKEN=방금_넣은_토큰 npm run users -- https://내앱.pages.dev
 ```
 
@@ -133,23 +137,24 @@ npm run dev                        # http://localhost:8788
 ## 구조
 
 ```
-public/                  정적 파일 (Cloudflare Pages 가 그대로 서빙)
+public/                  정적 파일 (Cloudflare 의 assets 레이어가 서빙)
   index.html               오늘의 게임
   login.html / ranking.html / admin.html / account.html
   css/style.css            모바일 우선 스타일 (다크 테마)
   js/common.js             API 호출, 상단 시계, 탭바, 로그인 가드
-functions/               Pages Functions (Workers 런타임에서 도는 API)
-  _lib/util.js             응답·시간·비밀번호 해싱·세션 헬퍼
-  _lib/game.js             정답 확정 및 우승자 판정
-  api/…                    각 엔드포인트
+src/                     Worker (API)
+  index.js                 진입점 — 경로/메서드 라우팅
+  lib/util.js              응답·시간·비밀번호 해싱·세션 헬퍼
+  lib/game.js              정답 확정 및 우승자 판정
+  routes/…                 각 엔드포인트
 schema.sql               D1 테이블 정의
 seed-users.sql           계정 4개 시드 (해시 포함, 자동 생성됨)
 scripts/make-seed.mjs    seed-users.sql 생성기
 scripts/create-users.mjs 계정 생성 / 비밀번호 재설정 CLI
 ```
 
-`functions/_lib/` 처럼 밑줄로 시작하는 디렉터리는 Pages 가 라우팅하지 않으므로
-API 경로로 노출되지 않습니다.
+요청은 먼저 `public/` 의 정적 파일과 맞춰 보고, 맞는 파일이 없을 때만 Worker 로 넘어갑니다.
+그래서 `/login` 은 `public/login.html` 로 이어지고 `/api/*` 만 `src/index.js` 가 처리합니다.
 
 ## API
 

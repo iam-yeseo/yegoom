@@ -1,5 +1,5 @@
-import { json, requireUser } from '../_lib/util.js';
-import { formatDiff } from '../_lib/game.js';
+import { json, requireUser } from '../lib/util.js';
+import { formatDiff } from '../lib/game.js';
 
 /** 누적 랭킹 — 우승 횟수 우선, 동률이면 평균 오차가 작은 순 */
 export async function onRequestGet(context) {

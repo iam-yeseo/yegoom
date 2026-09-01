@@ -1,4 +1,4 @@
-import { fail, hashPassword, json, readJson, requireUser, timingSafeEqual } from '../_lib/util.js';
+import { fail, hashPassword, json, readJson, requireUser, timingSafeEqual } from '../lib/util.js';
 
 /** 로그인한 사용자가 자기 비밀번호를 바꾼다. 바꾸면 다른 기기의 세션은 모두 끊긴다. */
 export async function onRequestPost(context) {

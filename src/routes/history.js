@@ -1,4 +1,4 @@
-import { json, minutesToHHMM, requireUser } from '../_lib/util.js';
+import { json, minutesToHHMM, requireUser } from '../lib/util.js';
 
 /** 지난 라운드 기록 (최근 30일) */
 export async function onRequestGet(context) {

@@ -1,7 +1,7 @@
 import {
   fail, hashPassword, json, randomHex, readJson,
   sessionCookie, SESSION_DAYS, timingSafeEqual,
-} from '../_lib/util.js';
+} from '../lib/util.js';
 
 export async function onRequestPost(context) {
   const { username, password } = await readJson(context.request);

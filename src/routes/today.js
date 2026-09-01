@@ -1,5 +1,5 @@
-import { json, minutesToHHMM, requireUser, todayKST } from '../_lib/util.js';
-import { formatDiff } from '../_lib/game.js';
+import { json, minutesToHHMM, requireUser, todayKST } from '../lib/util.js';
+import { formatDiff } from '../lib/game.js';
 
 /** 오늘 라운드의 전체 상태. 정답 공개 전에는 남의 예측이 내려가지 않는다. */
 export async function onRequestGet(context) {
