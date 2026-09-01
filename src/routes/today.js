@@ -2,6 +2,7 @@ import { json, requireUser, secondsToHHMMSS, todayKST } from '../lib/util.js';
 import {
   CLOSE_LABEL, closeExpiredRounds, formatDiff, formatScore, isClosed, roundNumberFor,
 } from '../lib/game.js';
+import { getSetter } from '../lib/setter.js';
 
 /** 오늘 라운드의 전체 상태. 정답 공개 전에는 남의 예측이 내려가지 않는다. */
 export async function onRequestGet(context) {
@@ -15,12 +16,15 @@ export async function onRequestGet(context) {
   // 19시가 지났는데 정답이 안 들어온 날들을 먼저 '게임 없음' 으로 정리한다
   await closeExpiredRounds(db);
 
-  const [round, playersRes, guessesRes, resultsRes, totalsRes] = await Promise.all([
+  const [round, playersRes, guessesRes, resultsRes, totalsRes, currentSetter] = await Promise.all([
     db.prepare(
-      `SELECT round_no, answer_seconds, status, revealed_at FROM rounds WHERE game_date = ?`,
+      `SELECT round_no, setter_user_id, answer_seconds, status, revealed_at
+         FROM rounds WHERE game_date = ?`,
     ).bind(gameDate).first(),
+    // 출제자는 자기 퇴근시간을 아는 사람이라 참가자 목록에서 뺀다
     db.prepare(
-      `SELECT id, username, display_name, avatar FROM users WHERE role = 'player' ORDER BY id`,
+      `SELECT id, username, display_name, avatar FROM users
+        WHERE role = 'player' AND is_setter = 0 ORDER BY id`,
     ).all(),
     db.prepare(`SELECT user_id, guess_seconds, updated_at FROM guesses WHERE game_date = ?`)
       .bind(gameDate).all(),
@@ -30,12 +34,27 @@ export async function onRequestGet(context) {
       `SELECT user_id, COALESCE(SUM(score), 0) AS score, COALESCE(SUM(is_winner), 0) AS wins
          FROM results GROUP BY user_id`,
     ).all(),
+    getSetter(db),
   ]);
 
   const status = round?.status ?? (isClosed(gameDate) ? 'void' : 'open');
   const revealed = status === 'settled';
   const closed = revealed || status === 'void' || isClosed(gameDate);
   const roundNo = await roundNumberFor(db, round);
+
+  // 지난 회차는 그날 기록해 둔 출제자를, 진행 중인 회차는 지금 지정된 출제자를 쓴다
+  const roundSetter = round?.setter_user_id
+    ? await db.prepare(`SELECT id, username, display_name, avatar FROM users WHERE id = ?`)
+        .bind(round.setter_user_id).first()
+    : null;
+  const setter = roundSetter
+    ? {
+        id: roundSetter.id,
+        username: roundSetter.username,
+        displayName: roundSetter.display_name,
+        avatar: roundSetter.avatar ?? '🙂',
+      }
+    : currentSetter;
 
   const guessByUser = new Map((guessesRes.results ?? []).map((g) => [g.user_id, g]));
   const resultByUser = new Map((resultsRes.results ?? []).map((r) => [r.user_id, r]));
@@ -70,6 +89,7 @@ export async function onRequestGet(context) {
     date: gameDate,
     isToday: gameDate === todayKST(),
     roundNo,
+    setter,
     status,
     revealed,
     closed,

@@ -1,7 +1,10 @@
 import { json, requireUser } from '../lib/util.js';
 import { closeExpiredRounds, formatDiff } from '../lib/game.js';
 
-/** 누적 랭킹 — 점수 합계 순, 동점이면 정확히 맞힌 횟수 -> 평균 오차 순 */
+/**
+ * 누적 랭킹 — 점수 합계 순, 동점이면 정확히 맞힌 횟수 -> 평균 오차 순.
+ * 운영자와 출제자는 게임에 참여하지 않으므로 빠진다.
+ */
 export async function onRequestGet(context) {
   const { response } = await requireUser(context);
   if (response) return response;
@@ -22,7 +25,7 @@ export async function onRequestGet(context) {
             MIN(r.diff_seconds)                                         AS best_diff
        FROM users u
        LEFT JOIN results r ON r.user_id = u.id
-      WHERE u.role = 'player'
+      WHERE u.role = 'player' AND u.is_setter = 0
       GROUP BY u.id
       ORDER BY score DESC, exacts DESC, (avg_diff IS NULL), avg_diff ASC, u.id ASC`,
   ).all();

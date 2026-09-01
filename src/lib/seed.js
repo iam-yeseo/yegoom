@@ -7,31 +7,44 @@ export const SEED_USERS = [
     "displayName": "yeseo",
     "avatar": "🐣",
     "role": "player",
-    "hash": "b7b73c692ddc1c07c2b3a5d9a09ec5ae6d9a52c83d0973052140c43eb6469c2a",
-    "salt": "90bed330c60cdf180aa1e1ef738b99b7"
+    "setter": false,
+    "hash": "f4dba3e33046ea4db478e8060746f34b024bb0f4ba69a73dcc5b940c723d53a8",
+    "salt": "b80ddc37d252e0ed57f508a3d4e1ebeb"
   },
   {
     "username": "min",
     "displayName": "min",
     "avatar": "🐤",
     "role": "player",
-    "hash": "cc4f07eff687ddea6d329a4f73f7db6f7861c34ee8d3cb050ed0847f2006d0a2",
-    "salt": "489d6a0360690fb3d412124cb9848b1b"
+    "setter": false,
+    "hash": "a9f90b33f8caf8429017afa7fc9c29065a322eba25545d63239532c7d64cab3d",
+    "salt": "beab27bafa64b5c71e671532fef99536"
   },
   {
     "username": "bin",
     "displayName": "bin",
     "avatar": "🐥",
     "role": "player",
-    "hash": "3a3a17f2280249ed379da9cb832c37a9ab0d65c64f26eef62c27bafab7e31b62",
-    "salt": "adc45380590a37eaac97eed79471dc17"
+    "setter": false,
+    "hash": "69f925d386b4de93c188ac7d34effb83debc51dfacc84e343a68d1370621655b",
+    "salt": "adb623b19430177edd1c588fda01c8e7"
   },
   {
     "username": "siwon",
     "displayName": "siwon",
+    "avatar": "🚪",
+    "role": "player",
+    "setter": true,
+    "hash": "a76f452b25048db11c9380c90ec9205b62809078498bbd2a96090ae2cc658edc",
+    "salt": "bd873b8058b1e26e76c4701d3186e196"
+  },
+  {
+    "username": "admin",
+    "displayName": "운영자",
     "avatar": "🔑",
     "role": "admin",
-    "hash": "0ed320a911d78162f4f141fb32163579293d237566e985e102803edc42aefcde",
-    "salt": "455f0f6165255ea777ccc391de266cf6"
+    "setter": false,
+    "hash": "e48ec4c65c5cb45fce22fdfe842d3a9bb555ace29d745c660dd237b36cedd19f",
+    "salt": "3bc70448693dcec8c3b36d194d9ba732"
   }
 ];

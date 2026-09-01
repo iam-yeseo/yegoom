@@ -44,6 +44,7 @@ export async function onRequestPost(context) {
         displayName: user.display_name,
         avatar: user.avatar ?? '🙂',
         role: user.role,
+        isSetter: user.is_setter === 1,
       },
     },
     { headers: { 'set-cookie': sessionCookie(token, context.request) } },

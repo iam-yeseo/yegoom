@@ -76,6 +76,9 @@
             .map((h) => {
               const voided = h.status !== 'settled';
               const head = voided ? '게임 없음' : escapeHtml(roundLabel(h.roundNo));
+              const setter = h.setter
+                ? ` · 출제 ${escapeHtml(`${h.setter.avatar} ${h.setter.displayName}`)}`
+                : '';
               const top = h.entries
                 .filter((e) => e.isWinner)
                 .map((e) => `${e.avatar} ${e.displayName}`);
@@ -86,7 +89,7 @@
               return `<div class="history-item${voided ? ' history-item--void' : ''}">
                 <div class="history-item__head">
                   <span class="history-item__date">
-                    ${escapeHtml(formatShortDate(h.date))} · ${head}
+                    ${escapeHtml(formatShortDate(h.date))} · ${head}${setter}
                   </span>
                   <span class="history-item__answer">${voided ? '—' : escapeHtml(h.answer)}</span>
                 </div>

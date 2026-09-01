@@ -5,6 +5,7 @@
 // /api/* 만 다루면 된다.
 
 import * as adminAnswer from './routes/admin-answer.js';
+import * as adminSetter from './routes/admin-setter.js';
 import * as bootstrap from './routes/bootstrap.js';
 import * as guess from './routes/guess.js';
 import * as history from './routes/history.js';
@@ -31,6 +32,7 @@ const ROUTES = new Map([
   ['/api/profile', profile],
   ['/api/setup', setup],
   ['/api/admin/answer', adminAnswer],
+  ['/api/admin/setter', adminSetter],
   ['/api/bootstrap', bootstrap],
   ['/api/migrate', migrate],
 ]);

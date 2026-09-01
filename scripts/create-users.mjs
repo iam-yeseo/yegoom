@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 계정 4개(플레이어 3명 + 운영자 1명)를 만들거나 비밀번호를 재설정하는 스크립트.
+// 계정 5개(플레이어 3명 + 출제자 1명 + 운영자 1명)를 만들거나 비밀번호를 재설정하는 스크립트.
 //
 //   SETUP_TOKEN=... node scripts/create-users.mjs http://localhost:8788
 //   SETUP_TOKEN=... node scripts/create-users.mjs https://toigeun-game.pages.dev
@@ -19,10 +19,13 @@ if (!token) {
 }
 
 // 닉네임은 한글/영문/숫자 10글자 이내, 프로필은 한 글자(이모지 가능)
+//   setter: true  출제자 — 이 사람의 퇴근시간을 맞히는 게임이다
+//   role: 'admin' 정답을 등록하는 운영자
 const DEFAULTS = [
   { username: 'player1', displayName: '플레이어1', avatar: '🐣', role: 'player' },
   { username: 'player2', displayName: '플레이어2', avatar: '🐤', role: 'player' },
   { username: 'player3', displayName: '플레이어3', avatar: '🐥', role: 'player' },
+  { username: 'setter', displayName: '출제자', avatar: '🚪', role: 'player', setter: true },
   { username: 'admin', displayName: '운영자', avatar: '🔑', role: 'admin' },
 ];
 
@@ -33,7 +36,7 @@ console.log(`\n대상 서버: ${baseUrl}`);
 console.log('엔터만 누르면 괄호 안의 기본값을 사용합니다.\n');
 
 for (const d of DEFAULTS) {
-  const label = d.role === 'admin' ? '운영자' : '플레이어';
+  const label = d.role === 'admin' ? '운영자' : d.setter ? '출제자' : '플레이어';
   console.log(`── ${label} (${d.username})`);
 
   const username = (await rl.question(`  아이디 (${d.username}): `)).trim() || d.username;
@@ -49,7 +52,7 @@ for (const d of DEFAULTS) {
     if (password.length < 3) console.log('  ! 3자 이상 입력해 주세요.');
   }
 
-  users.push({ username, displayName, avatar, role: d.role, password });
+  users.push({ username, displayName, avatar, role: d.role, setter: d.setter === true, password });
   console.log('');
 }
 
@@ -70,8 +73,7 @@ if (!res.ok) {
 
 console.log('\n✅ 계정 준비 완료');
 for (const u of data.users) {
-  console.log(
-    `   ${u.role === 'admin' ? '운영자  ' : '플레이어'} ${u.username} — ${u.avatar} ${u.displayName}`,
-  );
+  const label = u.role === 'admin' ? '운영자  ' : u.setter ? '출제자  ' : '플레이어';
+  console.log(`   ${label} ${u.username} — ${u.avatar} ${u.displayName}`);
 }
 console.log(`\n${baseUrl}/login 에서 로그인해 보세요.\n`);

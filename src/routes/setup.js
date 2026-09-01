@@ -1,14 +1,16 @@
 import {
   fail, hashPassword, json, normalizeAvatar, normalizeNickname, readJson, timingSafeEqual,
 } from '../lib/util.js';
+import { assignSetterStatements } from '../lib/setter.js';
 
 /**
  * 계정 생성 / 비밀번호 재설정용 관리 엔드포인트.
  * `SETUP_TOKEN` 시크릿이 설정돼 있어야 하고, 요청에 같은 토큰을 실어야 동작한다.
  *   npx wrangler pages secret put SETUP_TOKEN
  *
- * body: { users: [{ username, displayName, avatar, role: 'player'|'admin', password }] }
+ * body: { users: [{ username, displayName, avatar, role: 'player'|'admin', setter, password }] }
  * 이미 있는 아이디면 이름/역할/비밀번호를 덮어쓴다.
+ * setter: true 인 계정이 출제자가 된다 (항상 한 명이므로 마지막 하나만 남는다).
  */
 export async function onRequestPost(context) {
   const expected = context.env.SETUP_TOKEN;
@@ -38,6 +40,9 @@ export async function onRequestPost(context) {
     const avatar = avatarInput.value;
 
     if (password.length < 3) return fail(400, `'${username}' 의 비밀번호는 3자 이상이어야 합니다.`);
+    if (u.setter === true && role === 'admin') {
+      return fail(400, `'${username}': 운영자는 출제자가 될 수 없습니다.`);
+    }
 
     const { hash, salt } = await hashPassword(password);
     await context.env.DB.prepare(
@@ -53,7 +58,15 @@ export async function onRequestPost(context) {
       .bind(username, displayName, avatar, role, hash, salt)
       .run();
 
-    created.push({ username, displayName, avatar, role });
+    created.push({ username, displayName, avatar, role, setter: u.setter === true });
+  }
+
+  // 출제자는 항상 한 명 — 마지막으로 지정된 계정으로 갈아 끼운다
+  const setterName = created.filter((u) => u.setter).at(-1)?.username;
+  if (setterName) {
+    const row = await context.env.DB.prepare(`SELECT id FROM users WHERE username = ?`)
+      .bind(setterName).first();
+    await context.env.DB.batch(assignSetterStatements(context.env.DB, row?.id ?? null));
   }
 
   return json({ ok: true, users: created });

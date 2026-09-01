@@ -166,3 +166,9 @@ export function formatTime(value, { seconds = true } = {}) {
 export function roundLabel(no) {
   return `${no ?? 1}회차`;
 }
+
+/** 역할 이름 — 운영자 / 출제자 / 플레이어 */
+export function roleLabel(user) {
+  if (user?.role === 'admin') return '운영자';
+  return user?.isSetter ? '출제자' : '플레이어';
+}

@@ -3,7 +3,7 @@ import { migrate } from '../lib/migrate.js';
 import { SEED_USERS } from '../lib/seed.js';
 
 /**
- * 최초 1회 초기 설정 — 테이블을 만들고 계정 4개를 넣는다.
+ * 최초 1회 초기 설정 — 테이블을 만들고 계정 5개(플레이어 3 + 출제자 1 + 운영자 1)를 넣는다.
  *
  * wrangler CLI 없이 브라우저에서 끝낼 수 있게 만든 엔드포인트라, 아무나 못 쓰도록
  * 두 겹으로 막는다.
@@ -44,16 +44,16 @@ export async function onRequestPost(context) {
   // 1. 테이블 (이미 있으면 그대로 두고, 예전 스키마면 새 모양으로 옮긴다)
   await migrate(db);
 
-  // 2. 계정
+  // 2. 계정 (출제자 표시까지 함께 들어간다)
   await db.batch(
     SEED_USERS.map((u) =>
       db
         .prepare(
-          `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO users (username, display_name, avatar, role, is_setter, password_hash, password_salt)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(username) DO NOTHING`,
         )
-        .bind(u.username, u.displayName, u.avatar, u.role, u.hash, u.salt),
+        .bind(u.username, u.displayName, u.avatar, u.role, u.setter ? 1 : 0, u.hash, u.salt),
     ),
   );
 
@@ -71,6 +71,7 @@ async function readStatus(db) {
       displayName: u.display_name,
       avatar: u.avatar ?? '🙂',
       role: u.role,
+      isSetter: u.is_setter === 1,
     }));
     return { ready: users.length > 0, userCount: users.length, users };
   } catch {

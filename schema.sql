@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
      display_name  TEXT    NOT NULL,
      avatar        TEXT    NOT NULL DEFAULT '🙂',
      role          TEXT    NOT NULL CHECK (role IN ('player', 'admin')),
+     is_setter     INTEGER NOT NULL DEFAULT 0,
      password_hash TEXT    NOT NULL,
      password_salt TEXT    NOT NULL,
      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -29,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 CREATE TABLE IF NOT EXISTS rounds (
      game_date      TEXT    PRIMARY KEY,
      round_no       INTEGER,
+     setter_user_id INTEGER REFERENCES users(id),
      answer_seconds INTEGER,
      status         TEXT    NOT NULL DEFAULT 'open'
                             CHECK (status IN ('open', 'settled', 'void')),
