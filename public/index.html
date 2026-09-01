@@ -193,8 +193,17 @@
         .join('');
     }
 
-    await load();
+    try {
+      await load();
+    } catch (err) {
+      // 네트워크가 끊기면 스켈레톤만 남으므로 상태를 알려 준다
+      showMessage(el.msg, `불러오지 못했습니다: ${err.message}`);
+      el.subtitle.textContent = '연결을 확인해 주세요';
+      el.players.innerHTML = '<p class="muted center">잠시 후 다시 시도합니다.</p>';
+    }
+
     // 다른 참가자의 제출이나 정답 공개를 반영하기 위해 주기적으로 새로고침
+    // (실패했더라도 계속 돌면서 연결이 돌아오면 알아서 복구된다)
     setInterval(() => { if (!document.hidden) load().catch(() => {}); }, 20000);
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) load().catch(() => {});

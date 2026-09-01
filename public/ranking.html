@@ -42,52 +42,65 @@
       api, escapeHtml, formatShortDate, renderTabbar, requireLogin, startClock,
     } from '/js/common.js';
 
+    const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
     startClock();
     const user = await requireLogin();
     renderTabbar(user);
 
-    const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+    function renderRanking(ranking) {
+      return ranking.length
+        ? ranking
+            .map((r) => {
+              const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
+              const meta = r.played
+                ? `${r.played}판 · 승률 ${r.winRate}% · 평균 ${r.avgDiffText}`
+                : '아직 참가 기록이 없어요';
+              return `<div class="rank">
+                <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
+                <div class="rank__body">
+                  <div class="rank__name">${escapeHtml(r.displayName)} ${me}</div>
+                  <div class="rank__meta">${escapeHtml(meta)}</div>
+                </div>
+                <div class="rank__wins"><b>${r.wins}</b><span>승</span></div>
+              </div>`;
+            })
+            .join('')
+        : '<p class="muted center">아직 등록된 플레이어가 없어요.</p>';
+    }
 
-    const [{ ranking }, { history }] = await Promise.all([
-      api('/api/ranking'),
-      api('/api/history'),
-    ]);
+    function renderHistory(history) {
+      return history.length
+        ? history
+            .map((h) => {
+              const winners = h.entries.filter((e) => e.isWinner).map((e) => e.displayName);
+              return `<div class="history-item">
+                <div class="history-item__head">
+                  <span class="history-item__date">${escapeHtml(formatShortDate(h.date))}</span>
+                  <span class="history-item__answer">${escapeHtml(h.answer)}</span>
+                </div>
+                <div class="history-item__winners">${
+                  winners.length ? `🏆 ${escapeHtml(winners.join(', '))}` : '참가자 없음'
+                }</div>
+              </div>`;
+            })
+            .join('')
+        : '<p class="muted center">아직 공개된 정답이 없어요.</p>';
+    }
 
-    document.getElementById('ranking').innerHTML = ranking.length
-      ? ranking
-          .map((r) => {
-            const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
-            const meta = r.played
-              ? `${r.played}판 · 승률 ${r.winRate}% · 평균 ${r.avgDiffText}`
-              : '아직 참가 기록이 없어요';
-            return `<div class="rank">
-              <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
-              <div class="rank__body">
-                <div class="rank__name">${escapeHtml(r.displayName)} ${me}</div>
-                <div class="rank__meta">${escapeHtml(meta)}</div>
-              </div>
-              <div class="rank__wins"><b>${r.wins}</b><span>승</span></div>
-            </div>`;
-          })
-          .join('')
-      : '<p class="muted center">아직 등록된 플레이어가 없어요.</p>';
-
-    document.getElementById('history').innerHTML = history.length
-      ? history
-          .map((h) => {
-            const winners = h.entries.filter((e) => e.isWinner).map((e) => e.displayName);
-            return `<div class="history-item">
-              <div class="history-item__head">
-                <span class="history-item__date">${escapeHtml(formatShortDate(h.date))}</span>
-                <span class="history-item__answer">${escapeHtml(h.answer)}</span>
-              </div>
-              <div class="history-item__winners">${
-                winners.length ? `🏆 ${escapeHtml(winners.join(', '))}` : '참가자 없음'
-              }</div>
-            </div>`;
-          })
-          .join('')
-      : '<p class="muted center">아직 공개된 정답이 없어요.</p>';
+    // 네트워크가 끊겨도 스켈레톤만 남지 않도록 실패를 화면에 보여 준다
+    try {
+      const [{ ranking }, { history }] = await Promise.all([
+        api('/api/ranking'),
+        api('/api/history'),
+      ]);
+      document.getElementById('ranking').innerHTML = renderRanking(ranking);
+      document.getElementById('history').innerHTML = renderHistory(history);
+    } catch (err) {
+      const msg = `<p class="muted center">불러오지 못했습니다.<br />${escapeHtml(err.message)}</p>`;
+      document.getElementById('ranking').innerHTML = msg;
+      document.getElementById('history').innerHTML = msg;
+    }
   </script>
 </body>
 </html>
