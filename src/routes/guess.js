@@ -6,6 +6,7 @@ export async function onRequestPost(context) {
   const { user, response } = await requireUser(context);
   if (response) return response;
   if (user.role !== 'player') return fail(403, '운영자는 예측을 제출할 수 없습니다.');
+  if (user.isSetter) return fail(403, '출제자는 자기 퇴근시간을 예측할 수 없습니다.');
 
   const body = await readJson(context.request);
   const seconds = normalizeSeconds(body.time ?? body.seconds);

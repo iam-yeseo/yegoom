@@ -11,9 +11,11 @@ export async function onRequestGet(context) {
 
   const [roundsRes, resultsRes] = await Promise.all([
     db.prepare(
-      `SELECT game_date, round_no, answer_seconds, status FROM rounds
-        WHERE status IN ('settled', 'void')
-        ORDER BY game_date DESC LIMIT 30`,
+      `SELECT r.game_date, r.round_no, r.answer_seconds, r.status,
+              u.display_name AS setter_name, u.avatar AS setter_avatar
+         FROM rounds r LEFT JOIN users u ON u.id = r.setter_user_id
+        WHERE r.status IN ('settled', 'void')
+        ORDER BY r.game_date DESC LIMIT 30`,
     ).all(),
     db.prepare(
       `SELECT r.game_date, r.diff_seconds, r.score, r.is_winner, u.display_name, u.avatar
@@ -46,6 +48,9 @@ export async function onRequestGet(context) {
       date: r.game_date,
       roundNo: r.round_no,
       status: r.status,
+      setter: r.setter_name
+        ? { displayName: r.setter_name, avatar: r.setter_avatar ?? '🙂' }
+        : null,
       answer: r.status === 'settled' ? secondsToHHMMSS(r.answer_seconds) : null,
       entries: byDate.get(r.game_date) ?? [],
     })),

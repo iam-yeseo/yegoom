@@ -5,7 +5,11 @@
 // 이미 예전 스키마(분 단위)로 만들어진 DB 는 src/lib/migrate.js 가 새 모양으로 옮긴다.
 
 export const SCHEMA_STATEMENTS = [
-  // 사용자: 플레이어 + 운영자
+  // 사용자: 플레이어 + 출제자 + 운영자
+  //   role      권한. 'admin' 은 정답을 등록하는 운영자 계정 하나뿐이다.
+  //   is_setter 출제자 표시. 퇴근시간을 맞히는 '대상'이 되는 사람 한 명이며,
+  //             본인은 예측을 낼 수 없고 랭킹에도 들어가지 않는다.
+  //             운영자가 /setup 에서 지정하고, 항상 한 명만 1 이다.
   // display_name 은 본인이 바꿀 수 있는 닉네임(한글/영문/숫자 10글자 이내),
   // avatar 는 프로필 자리에 들어가는 한 글자(이모지 가능).
   `CREATE TABLE IF NOT EXISTS users (
@@ -14,6 +18,7 @@ export const SCHEMA_STATEMENTS = [
      display_name  TEXT    NOT NULL,
      avatar        TEXT    NOT NULL DEFAULT '🙂',
      role          TEXT    NOT NULL CHECK (role IN ('player', 'admin')),
+     is_setter     INTEGER NOT NULL DEFAULT 0,
      password_hash TEXT    NOT NULL,
      password_salt TEXT    NOT NULL,
      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -37,6 +42,7 @@ export const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS rounds (
      game_date      TEXT    PRIMARY KEY,
      round_no       INTEGER,
+     setter_user_id INTEGER REFERENCES users(id),
      answer_seconds INTEGER,
      status         TEXT    NOT NULL DEFAULT 'open'
                             CHECK (status IN ('open', 'settled', 'void')),

@@ -28,7 +28,7 @@
     <p id="msg" class="msg hidden" role="alert"></p>
 
     <section class="card">
-      <div class="card__label">오늘 실제 퇴근한 시간 · 초까지</div>
+      <div class="card__label" id="answer-label">오늘 실제 퇴근한 시간 · 초까지</div>
       <input id="answer-input" class="time-input" type="time" step="1" value="18:00:00"
              aria-label="정답 퇴근시간 (초까지)" />
       <button id="reveal" class="btn" type="button" style="margin-top: 12px">
@@ -37,6 +37,12 @@
       <p class="muted center" style="font-size: 13px; margin: 10px 0 0">
         공개하면 오차와 점수가 바로 확정되고, 회차가 하나 올라갑니다.
       </p>
+    </section>
+
+    <section class="card">
+      <div class="card__label">출제자</div>
+      <p style="margin: 0 0 12px" id="setter-text">불러오는 중…</p>
+      <a class="btn btn--ghost" href="/setup">출제자 바꾸기</a>
     </section>
 
     <section id="revealed-box" class="card hidden">
@@ -74,6 +80,8 @@
       roundNote: document.getElementById('round-note'),
       subtitle: document.getElementById('subtitle'),
       msg: document.getElementById('msg'),
+      answerLabel: document.getElementById('answer-label'),
+      setterText: document.getElementById('setter-text'),
       input: document.getElementById('answer-input'),
       reveal: document.getElementById('reveal'),
       revealedBox: document.getElementById('revealed-box'),
@@ -143,6 +151,16 @@
       el.subtitle.textContent = state.revealed
         ? '정답 공개됨'
         : `${submitted}/${state.players.length}명 확정 · 공개 대기 중`;
+
+      const setterName = state.setter
+        ? `${state.setter.avatar} ${state.setter.displayName}`
+        : null;
+      el.answerLabel.textContent = setterName
+        ? `${setterName} 님이 실제 퇴근한 시간 · 초까지`
+        : '오늘 실제 퇴근한 시간 · 초까지';
+      el.setterText.textContent = setterName
+        ? `${setterName} 님의 퇴근시간을 맞히는 게임입니다.`
+        : '아직 출제자가 지정되지 않았습니다. 지정해야 게임이 시작됩니다.';
 
       el.revealedBox.classList.toggle('hidden', !state.revealed);
       el.reveal.classList.toggle('hidden', state.revealed);

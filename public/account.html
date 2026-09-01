@@ -74,7 +74,9 @@
   <nav class="tabbar" data-tabbar aria-label="주요 메뉴"></nav>
 
   <script type="module">
-    import { api, renderTabbar, requireLogin, showMessage, startClock } from '/js/common.js';
+    import {
+      api, renderTabbar, requireLogin, roleLabel, showMessage, startClock,
+    } from '/js/common.js';
 
     const EMOJI_PICKS = ['🐣', '🐤', '🐥', '🦊', '🐼', '🐧', '🍀', '⭐', '🔥', '🌙', '🍜', '🕕'];
     const NICKNAME_RE = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9]+$/u;
@@ -103,8 +105,7 @@
       return segmenter ? [...segmenter.segment(text)].map((s) => s.segment) : [...text];
     }
 
-    el.subtitle.textContent =
-      `${user.username} · ${user.role === 'admin' ? '운영자' : '플레이어'}`;
+    el.subtitle.textContent = `${user.username} · ${roleLabel(user)}`;
     el.nickname.value = user.displayName;
     el.avatar.value = user.avatar ?? '🙂';
     syncPreview();

@@ -13,7 +13,7 @@
   <main class="auth">
     <div class="auth__logo" aria-hidden="true">🛠️</div>
     <h1 class="auth__title">초기 설정</h1>
-    <p class="auth__sub">테이블을 만들고 계정 4개를 넣습니다. 한 번만 하면 됩니다.</p>
+    <p class="auth__sub">테이블과 계정을 준비하고, 출제자를 지정하는 운영자 페이지입니다.</p>
 
     <p id="msg" class="msg hidden" role="status"></p>
 
@@ -29,17 +29,27 @@
     </section>
 
     <section class="card">
+      <div class="card__label">출제자 지정</div>
+      <p class="muted" style="margin: 0 0 12px; font-size: 14px">
+        출제자의 퇴근시간이 그날의 정답이 됩니다. 출제자 본인은 예측을 낼 수 없고
+        랭킹에도 들어가지 않습니다. 운영자로 로그인해야 보입니다.
+      </p>
+      <div id="setter-list"><div class="skeleton"></div></div>
+    </section>
+
+    <section class="card">
       <div class="card__label">스키마 업데이트</div>
       <p class="muted" style="margin: 0 0 12px; font-size: 14px">
-        예전 버전(분 단위 · 프로필 없음)으로 만든 데이터베이스를 지금 모양으로 옮깁니다.
-        기록은 그대로 옮겨지고, 이미 최신이면 아무 일도 일어나지 않습니다.
+        예전 버전으로 만든 데이터베이스를 지금 모양으로 옮깁니다. 기록은 그대로
+        옮겨지고, 이미 최신이면 아무 일도 일어나지 않습니다.
         운영자로 로그인했거나 설정 토큰이 있어야 실행됩니다.
       </p>
+      <p id="migrate-state" class="msg hidden" style="margin: 0 0 12px"></p>
       <button id="migrate" class="btn btn--ghost" type="button">스키마 업데이트 실행</button>
     </section>
 
     <p class="center muted" style="font-size: 13px">
-      계정이 하나라도 생기면 이 페이지는 스스로 닫힙니다.
+      초기 설정은 계정이 하나라도 생기면 스스로 닫힙니다.
     </p>
   </main>
 
@@ -52,6 +62,8 @@
       run: document.getElementById('run'),
       go: document.getElementById('go'),
       migrate: document.getElementById('migrate'),
+      migrateState: document.getElementById('migrate-state'),
+      setterList: document.getElementById('setter-list'),
     };
 
     // SETUP_TOKEN 을 걸어 뒀다면 /setup?token=... 으로 들어온다
@@ -64,15 +76,88 @@
             <div class="player__avatar" aria-hidden="true">${escapeHtml(u.avatar ?? u.displayName.charAt(0))}</div>
             <div class="player__body">
               <div class="player__name">${escapeHtml(u.displayName)}</div>
-              <div class="player__meta">${escapeHtml(u.username)} · ${u.role === 'admin' ? '운영자' : '플레이어'}</div>
+              <div class="player__meta">${escapeHtml(u.username)} · ${
+                u.role === 'admin' ? '운영자' : u.isSetter ? '출제자' : '플레이어'
+              }</div>
             </div>
           </div>`,
         )
         .join('');
     }
 
+    /** 출제자 후보 목록 — 운영자로 로그인했을 때만 내려온다 */
+    async function refreshSetter() {
+      let data;
+      try {
+        data = await api('/api/admin/setter');
+      } catch (err) {
+        el.setterList.innerHTML = `<p class="muted center" style="margin:0">${
+          err.status === 401 || err.status === 403
+            ? '운영자로 로그인하면 여기서 출제자를 바꿀 수 있어요.'
+            : escapeHtml(err.message)
+        }</p>`;
+        return;
+      }
+
+      el.setterList.innerHTML = data.candidates.length
+        ? data.candidates
+            .map(
+              (u) => `<div class="player">
+                <div class="player__avatar" aria-hidden="true">${escapeHtml(u.avatar)}</div>
+                <div class="player__body">
+                  <div class="player__name">${escapeHtml(u.displayName)}${
+                    u.isSetter ? '<span class="tag tag--win">출제자</span>' : ''
+                  }</div>
+                  <div class="player__meta">${escapeHtml(u.username)}</div>
+                </div>
+                <button class="chip" type="button" data-setter="${u.id}"${
+                  u.isSetter ? ' disabled' : ''
+                }>${u.isSetter ? '지정됨' : '출제자로'}</button>
+              </div>`,
+            )
+            .join('')
+        : '<p class="muted center" style="margin:0">지정할 수 있는 참가자가 없어요.</p>';
+    }
+
+    el.setterList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-setter]');
+      if (!btn || btn.disabled) return;
+      btn.disabled = true;
+      showMessage(el.msg, '');
+      try {
+        const res = await api('/api/admin/setter', {
+          method: 'POST',
+          body: { userId: Number(btn.dataset.setter) },
+        });
+        showMessage(el.msg, `${res.setter.displayName} 님을 출제자로 지정했어요.`, 'ok');
+      } catch (err) {
+        showMessage(el.msg, err.message);
+      }
+      await refreshSetter().catch(() => {});
+    });
+
     async function refresh() {
       const s = await api('/api/bootstrap');
+
+      // 배포만 하고 스키마를 안 옮기면 admin 계정이 없어 로그인이 막힌다.
+      // 남은 게 있으면 눈에 띄게 알려 준다.
+      const pending = s.pendingMigration ?? [];
+      if (pending.length) {
+        const needsAdmin = pending.includes('users.admin-account');
+        showMessage(
+          el.migrateState,
+          `업데이트가 필요합니다 (${pending.join(', ')}).` +
+            (needsAdmin ? ' 실행하면 운영자 계정 admin 이 만들어집니다.' : ''),
+          'error',
+        );
+        el.migrate.classList.remove('btn--ghost');
+      } else if (s.ready) {
+        showMessage(el.migrateState, '이미 최신 스키마입니다.', 'ok');
+        el.migrate.classList.add('btn--ghost');
+      } else {
+        showMessage(el.migrateState, '');
+      }
+
       if (s.ready) {
         el.status.innerHTML =
           `<p style="margin:0 0 10px">설정이 끝났습니다. 계정 ${s.userCount}개가 있습니다.</p>` +
@@ -97,6 +182,7 @@
         const res = await api(path, { method: 'POST' });
         showMessage(el.msg, `계정 ${res.userCount}개를 만들었습니다.`, 'ok');
         await refresh();
+        await refreshSetter().catch(() => {});
       } catch (err) {
         showMessage(el.msg, err.message);
         el.run.disabled = false;
@@ -114,10 +200,16 @@
         const res = await api(path, { method: 'POST' });
         showMessage(
           el.msg,
-          res.migrated ? `옮긴 항목: ${res.applied.join(', ')}` : '이미 최신 스키마입니다.',
+          res.migrated
+            ? `옮긴 항목: ${res.applied.join(', ')}.` +
+                (res.applied.includes('users.admin-account')
+                  ? ' 이제 admin / admin 으로 로그인하세요.'
+                  : '')
+            : '이미 최신 스키마입니다.',
           'ok',
         );
         await refresh().catch(() => {});
+        await refreshSetter().catch(() => {});
       } catch (err) {
         showMessage(el.msg, err.message);
       } finally {
@@ -132,6 +224,8 @@
       showMessage(el.msg, `상태를 확인하지 못했습니다: ${err.message}`);
       el.status.innerHTML = '<p class="muted" style="margin:0">D1 바인딩을 확인해 주세요.</p>';
     }
+
+    await refreshSetter().catch(() => {});
   </script>
 </body>
 </html>

@@ -1,9 +1,9 @@
 import { fail, json, timingSafeEqual } from '../lib/util.js';
-import { migrate } from '../lib/migrate.js';
+import { migrate, pendingMigrations } from '../lib/migrate.js';
 import { SEED_USERS } from '../lib/seed.js';
 
 /**
- * 최초 1회 초기 설정 — 테이블을 만들고 계정 4개를 넣는다.
+ * 최초 1회 초기 설정 — 테이블을 만들고 계정 5개(플레이어 3 + 출제자 1 + 운영자 1)를 넣는다.
  *
  * wrangler CLI 없이 브라우저에서 끝낼 수 있게 만든 엔드포인트라, 아무나 못 쓰도록
  * 두 겹으로 막는다.
@@ -16,7 +16,14 @@ import { SEED_USERS } from '../lib/seed.js';
 /** 설정이 끝났는지 확인 — /setup 페이지가 상태를 보여주는 데 쓴다. */
 export async function onRequestGet(context) {
   const status = await readStatus(context.env.DB);
-  return json({ ok: true, ...status });
+  // 스키마가 예전 모양이면 /setup 이 "업데이트 필요" 를 띄울 수 있게 알려 준다
+  let pending = [];
+  try {
+    pending = await pendingMigrations(context.env.DB);
+  } catch {
+    /* 테이블이 아직 없을 수 있다 */
+  }
+  return json({ ok: true, ...status, pendingMigration: pending });
 }
 
 export async function onRequestPost(context) {
@@ -44,16 +51,16 @@ export async function onRequestPost(context) {
   // 1. 테이블 (이미 있으면 그대로 두고, 예전 스키마면 새 모양으로 옮긴다)
   await migrate(db);
 
-  // 2. 계정
+  // 2. 계정 (출제자 표시까지 함께 들어간다)
   await db.batch(
     SEED_USERS.map((u) =>
       db
         .prepare(
-          `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO users (username, display_name, avatar, role, is_setter, password_hash, password_salt)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(username) DO NOTHING`,
         )
-        .bind(u.username, u.displayName, u.avatar, u.role, u.hash, u.salt),
+        .bind(u.username, u.displayName, u.avatar, u.role, u.setter ? 1 : 0, u.hash, u.salt),
     ),
   );
 
@@ -71,6 +78,7 @@ async function readStatus(db) {
       displayName: u.display_name,
       avatar: u.avatar ?? '🙂',
       role: u.role,
+      isSetter: u.is_setter === 1,
     }));
     return { ready: users.length > 0, userCount: users.length, users };
   } catch {

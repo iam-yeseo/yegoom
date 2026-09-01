@@ -102,6 +102,15 @@ body {
 
 .page-title span { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 3px; }
 
+/* 제목 본문 자체를 스크립트로 갈아 끼우는 페이지용 — 부제 스타일을 물려받지 않는다 */
+.page-title .page-title__main {
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  margin: 0;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -256,6 +265,7 @@ input[type='time'], input[type='date'] {
 
 .round-line {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;

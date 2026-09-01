@@ -14,13 +14,17 @@ import { SCHEMA_STATEMENTS } from '../src/lib/schema.js';
 
 const ITERATIONS = 100_000;
 
-// 아이디와 비밀번호가 같은 계정 4개.
+// 아이디와 비밀번호가 같은 계정 5개.
 // displayName(닉네임)과 avatar(프로필 한 글자)는 로그인 후 각자 바꿀 수 있는 초기값이다.
+//   role: 'admin'  정답을 등록하는 운영자 (게임에는 참여하지 않는다)
+//   setter: true   출제자 — 이 사람의 퇴근시간을 맞히는 게임이다. 항상 한 명.
 const USERS = [
   { username: 'yeseo', displayName: 'yeseo', avatar: '🐣', role: 'player', password: 'yeseo' },
   { username: 'min',   displayName: 'min',   avatar: '🐤', role: 'player', password: 'min' },
   { username: 'bin',   displayName: 'bin',   avatar: '🐥', role: 'player', password: 'bin' },
-  { username: 'siwon', displayName: 'siwon', avatar: '🔑', role: 'admin',  password: 'siwon' },
+  { username: 'siwon', displayName: 'siwon', avatar: '🚪', role: 'player', password: 'siwon',
+    setter: true },
+  { username: 'admin', displayName: '운영자', avatar: '🔑', role: 'admin',  password: 'admin' },
 ];
 
 function hashPassword(password) {
@@ -32,7 +36,7 @@ function hashPassword(password) {
 const seeded = USERS.map((u) => {
   const { hash, salt } = hashPassword(u.password);
   const { password, ...rest } = u;
-  return { ...rest, hash, salt };
+  return { ...rest, setter: u.setter === true, hash, salt };
 });
 
 const banner = (what) => `-- 퇴근시간 맞히기 · ${what}\n-- 자동 생성됨: npm run generate — 직접 고치지 말고 scripts/generate.mjs 를 고칠 것\n`;
@@ -58,17 +62,18 @@ writeFileSync(
     banner('계정 시드'),
     '-- 적용: npm run db:seed',
     '-- 비밀번호는 PBKDF2-SHA256 10만회로 해싱돼 있어 이 파일에 평문은 없다.',
-    '-- 같은 아이디가 이미 있으면 닉네임/프로필/역할/비밀번호를 덮어쓴다.',
+    '-- 같은 아이디가 이미 있으면 닉네임/프로필/역할/출제자 여부/비밀번호를 덮어쓴다.',
     '',
     seeded
       .map((u) =>
         [
-          `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)`,
-          `VALUES (${q(u.username)}, ${q(u.displayName)}, ${q(u.avatar)}, ${q(u.role)}, ${q(u.hash)}, ${q(u.salt)})`,
+          `INSERT INTO users (username, display_name, avatar, role, is_setter, password_hash, password_salt)`,
+          `VALUES (${q(u.username)}, ${q(u.displayName)}, ${q(u.avatar)}, ${q(u.role)}, ${u.setter ? 1 : 0}, ${q(u.hash)}, ${q(u.salt)})`,
           `ON CONFLICT(username) DO UPDATE SET`,
           `  display_name  = excluded.display_name,`,
           `  avatar        = excluded.avatar,`,
           `  role          = excluded.role,`,
+          `  is_setter     = excluded.is_setter,`,
           `  password_hash = excluded.password_hash,`,
           `  password_salt = excluded.password_salt;`,
         ].join('\n'),
@@ -92,7 +97,6 @@ writeFileSync(
 
 console.log('생성 완료: schema.sql, seed-users.sql, src/lib/seed.js');
 for (const u of seeded) {
-  console.log(
-    `  ${u.role === 'admin' ? '운영자  ' : '플레이어'} ${u.username} — ${u.avatar} ${u.displayName}`,
-  );
+  const label = u.role === 'admin' ? '운영자  ' : u.setter ? '출제자  ' : '플레이어';
+  console.log(`  ${label} ${u.username} — ${u.avatar} ${u.displayName}`);
 }

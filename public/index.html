@@ -21,7 +21,7 @@
     </div>
 
     <h1 class="page-title">
-      오늘의 퇴근시간
+      <span id="title-text" class="page-title__main">오늘의 퇴근시간</span>
       <span id="subtitle">불러오는 중…</span>
     </h1>
 
@@ -52,6 +52,12 @@
       <p class="muted center" style="font-size: 13px; margin: 10px 0 0">
         <span id="guess-hint">19:00 마감 전까지 몇 번이든 바꿀 수 있어요.</span>
       </p>
+    </section>
+
+    <!-- 출제자 안내 -->
+    <section id="setter-box" class="card hidden">
+      <div class="card__label">출제자</div>
+      <p style="margin: 0" id="setter-text"></p>
     </section>
 
     <!-- 운영자 안내 -->
@@ -100,7 +106,10 @@
     const el = {
       roundBadge: document.getElementById('round-badge'),
       roundNote: document.getElementById('round-note'),
+      titleText: document.getElementById('title-text'),
       subtitle: document.getElementById('subtitle'),
+      setterBox: document.getElementById('setter-box'),
+      setterText: document.getElementById('setter-text'),
       msg: document.getElementById('msg'),
       answerBox: document.getElementById('answer-box'),
       answerTime: document.getElementById('answer-time'),
@@ -168,6 +177,11 @@
         ? '정답 공개'
         : state.closed ? '마감됨' : `${state.closesAt} 마감`;
 
+      // 누구의 퇴근시간을 맞히는 게임인지
+      el.titleText.textContent = state.setter
+        ? `${state.setter.avatar} ${state.setter.displayName} 님의 퇴근시간`
+        : '오늘의 퇴근시간';
+
       // 헤더 문구
       if (state.revealed) {
         const winners = state.players.filter((p) => p.isWinner);
@@ -200,10 +214,18 @@
           : '정답 없이 끝난 날이에요 (게임 없음).';
       }
 
-      // 입력 카드 / 운영자 카드
-      const canGuess = isPlayer && !state.closed;
+      // 입력 카드 / 출제자 카드 / 운영자 카드
+      const isSetter = state.setter?.id === user.id;
+      const canGuess = isPlayer && !isSetter && !state.closed;
       el.guessBox.classList.toggle('hidden', !canGuess);
+      el.setterBox.classList.toggle('hidden', !isSetter);
       el.adminBox.classList.toggle('hidden', user.role !== 'admin' || state.revealed);
+
+      if (isSetter) {
+        el.setterText.textContent = state.revealed
+          ? '오늘은 내가 출제자였어요. 다들 내 퇴근시간을 맞혀 봤습니다.'
+          : '오늘의 출제자는 나예요. 내 퇴근시간이 정답이라 예측은 낼 수 없어요.';
+      }
 
       if (canGuess) {
         el.guessInput.value = state.myGuess ?? DEFAULT_TIME;

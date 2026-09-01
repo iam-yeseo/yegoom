@@ -1,6 +1,7 @@
 // 라운드 로직 — 마감 시각, 점수 계산, 정답 확정, 회차 관리.
 
 import { renumberRoundsStatements } from './migrate.js';
+import { getSetter } from './setter.js';
 import { nowSecondsKST, secondsToHHMMSS, shiftDate, todayKST } from './util.js';
 
 /** 매일 19:00 (KST) 이 지나면 그날 게임은 자동으로 마감된다. */
@@ -98,12 +99,16 @@ export async function roundNumberFor(db, round) {
  * - 점수는 SCORE_RULES 대로, 동점이어도 각자 같은 점수를 받는다
  * - 오차가 가장 작은 사람이 그날의 우승, 동점이면 공동 우승
  * - 예측을 제출하지 않은 사람은 결과에서 제외
+ *
+ * 그날의 출제자가 누구였는지도 함께 남긴다. 나중에 출제자가 바뀌어도 지난 회차의
+ * 기록은 그대로 읽힌다.
  */
 export async function settleRound(db, gameDate, answerSeconds, adminId) {
-  const { results: guesses } = await db
-    .prepare(`SELECT user_id, guess_seconds FROM guesses WHERE game_date = ?`)
-    .bind(gameDate)
-    .all();
+  const [{ results: guesses }, setter] = await Promise.all([
+    db.prepare(`SELECT user_id, guess_seconds FROM guesses WHERE game_date = ?`)
+      .bind(gameDate).all(),
+    getSetter(db),
+  ]);
 
   const scored = (guesses ?? []).map((g) => {
     const diff = Math.abs(g.guess_seconds - answerSeconds);
@@ -114,16 +119,18 @@ export async function settleRound(db, gameDate, answerSeconds, adminId) {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO rounds (game_date, answer_seconds, status, revealed_at, closed_at, created_by)
-         VALUES (?, ?, 'settled', datetime('now'), datetime('now'), ?)
+        `INSERT INTO rounds
+           (game_date, setter_user_id, answer_seconds, status, revealed_at, closed_at, created_by)
+         VALUES (?, ?, ?, 'settled', datetime('now'), datetime('now'), ?)
          ON CONFLICT(game_date) DO UPDATE
-           SET answer_seconds = excluded.answer_seconds,
+           SET setter_user_id = excluded.setter_user_id,
+               answer_seconds = excluded.answer_seconds,
                status         = 'settled',
                revealed_at    = excluded.revealed_at,
                closed_at      = excluded.closed_at,
                created_by     = excluded.created_by`,
       )
-      .bind(gameDate, answerSeconds, adminId),
+      .bind(gameDate, setter?.id ?? null, answerSeconds, adminId),
     // 재공개(정답 수정)를 대비해 이전 결과를 지우고 다시 쓴다
     db.prepare(`DELETE FROM results WHERE game_date = ?`).bind(gameDate),
     ...scored.map((s) =>
@@ -145,6 +152,7 @@ export async function settleRound(db, gameDate, answerSeconds, adminId) {
   return {
     gameDate,
     roundNo: round?.round_no ?? null,
+    setter,
     answer: secondsToHHMMSS(answerSeconds),
     answerSeconds,
     participants: scored.length,

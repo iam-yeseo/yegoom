@@ -211,6 +211,7 @@ export async function getUser(context) {
     displayName: row.display_name,
     avatar: row.avatar ?? '🙂',
     role: row.role,
+    isSetter: row.is_setter === 1,
   };
 }
 
