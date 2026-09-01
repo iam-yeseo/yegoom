@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1020" />
+  <title>로그인 · 퇴근시간 맞히기</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
+</head>
+<body>
+  <main class="auth">
+    <div class="auth__logo" aria-hidden="true">🕕</div>
+    <h1 class="auth__title">퇴근시간 맞히기</h1>
+    <p class="auth__sub">오늘은 몇 시에 퇴근할까요?</p>
+
+    <p id="msg" class="msg hidden" role="alert"></p>
+
+    <form id="login-form" class="card" autocomplete="on">
+      <label class="field">
+        <span>아이디</span>
+        <input id="username" name="username" type="text" autocomplete="username"
+               autocapitalize="none" autocorrect="off" spellcheck="false" required />
+      </label>
+      <label class="field">
+        <span>비밀번호</span>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <button id="submit" class="btn" type="submit">로그인</button>
+    </form>
+
+    <p class="center muted" style="font-size: 13px">
+      계정은 운영자에게 문의하세요.
+    </p>
+  </main>
+
+  <script type="module">
+    import { api, showMessage } from '/js/common.js';
+
+    const form = document.getElementById('login-form');
+    const btn = document.getElementById('submit');
+    const msg = document.getElementById('msg');
+
+    // 이미 로그인돼 있으면 바로 게임으로
+    api('/api/me')
+      .then((r) => { if (r.user) location.replace(nextUrl()); })
+      .catch(() => {});
+
+    function nextUrl() {
+      const next = new URLSearchParams(location.search).get('next');
+      // 오픈 리다이렉트 방지: 같은 사이트의 경로만 허용
+      return next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showMessage(msg, '');
+      btn.disabled = true;
+      btn.textContent = '로그인 중…';
+
+      try {
+        await api('/api/login', {
+          method: 'POST',
+          body: {
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+          },
+        });
+        location.replace(nextUrl());
+      } catch (err) {
+        showMessage(msg, err.message);
+        btn.disabled = false;
+        btn.textContent = '로그인';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d1020" />
+  <title>랭킹 · 퇴근시간 맞히기</title>
+  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
+</head>
+<body>
+  <div class="app">
+    <header class="clock">
+      <div class="clock__date" data-clock-date>&nbsp;</div>
+      <div class="clock__time" data-clock-time>--:--</div>
+    </header>
+
+    <h1 class="page-title">
+      누적 랭킹
+      <span>우승 횟수 순 · 동률이면 평균 오차가 작은 순</span>
+    </h1>
+
+    <section class="card">
+      <div class="card__label">순위</div>
+      <div id="ranking">
+        <div class="skeleton"></div>
+        <div class="skeleton" style="width: 75%"></div>
+        <div class="skeleton" style="width: 88%"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card__label">지난 기록</div>
+      <div id="history"><div class="skeleton"></div></div>
+    </section>
+  </div>
+
+  <nav class="tabbar" data-tabbar aria-label="주요 메뉴"></nav>
+
+  <script type="module">
+    import {
+      api, escapeHtml, formatShortDate, renderTabbar, requireLogin, startClock,
+    } from '/js/common.js';
+
+    startClock();
+    const user = await requireLogin();
+    renderTabbar(user);
+
+    const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
+    const [{ ranking }, { history }] = await Promise.all([
+      api('/api/ranking'),
+      api('/api/history'),
+    ]);
+
+    document.getElementById('ranking').innerHTML = ranking.length
+      ? ranking
+          .map((r) => {
+            const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
+            const meta = r.played
+              ? `${r.played}판 · 승률 ${r.winRate}% · 평균 ${r.avgDiffText}`
+              : '아직 참가 기록이 없어요';
+            return `<div class="rank">
+              <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
+              <div class="rank__body">
+                <div class="rank__name">${escapeHtml(r.displayName)} ${me}</div>
+                <div class="rank__meta">${escapeHtml(meta)}</div>
+              </div>
+              <div class="rank__wins"><b>${r.wins}</b><span>승</span></div>
+            </div>`;
+          })
+          .join('')
+      : '<p class="muted center">아직 등록된 플레이어가 없어요.</p>';
+
+    document.getElementById('history').innerHTML = history.length
+      ? history
+          .map((h) => {
+            const winners = h.entries.filter((e) => e.isWinner).map((e) => e.displayName);
+            return `<div class="history-item">
+              <div class="history-item__head">
+                <span class="history-item__date">${escapeHtml(formatShortDate(h.date))}</span>
+                <span class="history-item__answer">${escapeHtml(h.answer)}</span>
+              </div>
+              <div class="history-item__winners">${
+                winners.length ? `🏆 ${escapeHtml(winners.join(', '))}` : '참가자 없음'
+              }</div>
+            </div>`;
+          })
+          .join('')
+      : '<p class="muted center">아직 공개된 정답이 없어요.</p>';
+  </script>
+</body>
+</html>

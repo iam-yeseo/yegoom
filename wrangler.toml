@@ -1,0 +1,10 @@
+name = "toigeun-game"
+compatibility_date = "2026-09-01"
+pages_build_output_dir = "public"
+
+# D1 데이터베이스 바인딩.
+# `npx wrangler d1 create toigeun-db` 로 만든 뒤 출력된 database_id 를 아래에 붙여넣으세요.
+[[d1_databases]]
+binding = "DB"
+database_name = "toigeun-db"
+database_id = "PASTE_YOUR_D1_DATABASE_ID_HERE"

@@ -1,0 +1,3 @@
+# 로컬 개발용 시크릿 (.dev.vars 로 복사해서 사용)
+# 계정 생성 엔드포인트(/api/setup)를 여는 토큰. 아무 긴 랜덤 문자열이면 됩니다.
+SETUP_TOKEN="change-me-to-a-long-random-string"
