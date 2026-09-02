@@ -2,6 +2,7 @@ import {
   fail, hashPassword, json, personOf, randomHex, readJson,
   sessionCookie, SESSION_DAYS, timingSafeEqual,
 } from '../lib/util.js';
+import { userWithSetterGames } from '../lib/setter.js';
 
 export async function onRequestPost(context) {
   const { username, password } = await readJson(context.request);
@@ -38,7 +39,10 @@ export async function onRequestPost(context) {
   return json(
     {
       ok: true,
-      user: personOf(user, { role: user.role, isSetter: user.is_setter === 1 }),
+      user: await userWithSetterGames(
+        context.env.DB,
+        personOf(user, { role: user.role }),
+      ),
     },
     { headers: { 'set-cookie': sessionCookie(token, context.request) } },
   );

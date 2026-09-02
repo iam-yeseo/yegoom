@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0d1020" />
   <meta name="robots" content="noindex" />
-  <title>초기 설정 · 퇴근시간 맞히기</title>
+  <title>초기 설정 · 기상 · 퇴근시간 맞히기</title>
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
 </head>
@@ -13,7 +13,7 @@
   <main class="auth">
     <div class="auth__logo" aria-hidden="true">🛠️</div>
     <h1 class="auth__title">초기 설정</h1>
-    <p class="auth__sub">테이블과 계정을 준비하고, 출제자를 지정하는 운영자 페이지입니다.</p>
+    <p class="auth__sub">테이블과 계정을 준비하고, 게임별 출제자를 지정하는 운영자 페이지입니다.</p>
 
     <p id="msg" class="msg hidden" role="status"></p>
 
@@ -31,8 +31,9 @@
     <section class="card">
       <div class="card__label">출제자 지정</div>
       <p class="muted" style="margin: 0 0 12px; font-size: 14px">
-        출제자의 퇴근시간이 그날의 정답이 됩니다. 출제자 본인은 예측을 낼 수 없고
-        랭킹에도 들어가지 않습니다. 운영자로 로그인해야 보입니다.
+        게임마다 출제자를 한 명씩 둡니다. 오전 게임은 출제자의 기상시간이, 오후 게임은
+        출제자의 퇴근시간이 그날의 정답입니다. 출제자는 자기 게임에만 빠지고 다른 게임에는
+        평범한 플레이어로 참가합니다. 운영자로 로그인해야 보입니다.
       </p>
       <div id="setter-list"><div class="skeleton"></div></div>
     </section>
@@ -54,7 +55,7 @@
   </main>
 
   <script type="module">
-    import { api, avatarOf, escapeHtml, showMessage } from '/js/common.js';
+    import { GAMES, api, avatarOf, escapeHtml, showMessage } from '/js/common.js';
 
     const el = {
       msg: document.getElementById('msg'),
@@ -69,6 +70,13 @@
     // SETUP_TOKEN 을 걸어 뒀다면 /setup?token=... 으로 들어온다
     const token = new URLSearchParams(location.search).get('token');
 
+    /** 이 사람이 맡고 있는 게임 — "🌅 오전 출제자" 처럼 적는다 */
+    function setterText(user) {
+      const games = user.setterGames ?? [];
+      if (!games.length) return null;
+      return games.map((g) => `${GAMES[g]?.icon ?? ''} ${GAMES[g]?.short ?? g} 출제자`).join(' · ');
+    }
+
     function renderUsers(users) {
       return users
         .map(
@@ -76,9 +84,9 @@
             <div class="player__avatar" aria-hidden="true">${avatarOf(u)}</div>
             <div class="player__body">
               <div class="player__name">${escapeHtml(u.displayName)}</div>
-              <div class="player__meta">${escapeHtml(u.username)} · ${
-                u.role === 'admin' ? '운영자' : u.isSetter ? '출제자' : '플레이어'
-              }</div>
+              <div class="player__meta">${escapeHtml(u.username)} · ${escapeHtml(
+                u.role === 'admin' ? '운영자' : setterText(u) ?? '플레이어',
+              )}</div>
             </div>
           </div>`,
         )
@@ -99,24 +107,42 @@
         return;
       }
 
-      el.setterList.innerHTML = data.candidates.length
-        ? data.candidates
-            .map(
-              (u) => `<div class="player">
+      if (!data.candidates.length) {
+        el.setterList.innerHTML =
+          '<p class="muted center" style="margin:0">지정할 수 있는 참가자가 없어요.</p>';
+        return;
+      }
+
+      // 게임마다 한 덩어리씩 — 어느 게임의 출제자를 고르는 중인지 헷갈리지 않게
+      el.setterList.innerHTML = data.games
+        .map((game) => {
+          const rows = data.candidates
+            .map((u) => {
+              const mine = (u.setterGames ?? []).includes(game.key);
+              return `<div class="player">
                 <div class="player__avatar" aria-hidden="true">${avatarOf(u)}</div>
                 <div class="player__body">
                   <div class="player__name">${escapeHtml(u.displayName)}${
-                    u.isSetter ? '<span class="tag tag--win">출제자</span>' : ''
+                    mine ? '<span class="tag tag--win">출제자</span>' : ''
                   }</div>
                   <div class="player__meta">${escapeHtml(u.username)}</div>
                 </div>
-                <button class="chip" type="button" data-setter="${u.id}"${
-                  u.isSetter ? ' disabled' : ''
-                }>${u.isSetter ? '지정됨' : '출제자로'}</button>
-              </div>`,
-            )
-            .join('')
-        : '<p class="muted center" style="margin:0">지정할 수 있는 참가자가 없어요.</p>';
+                <button class="chip" type="button" data-setter="${u.id}"
+                        data-game="${game.key}"${mine ? ' disabled' : ''}>${
+                  mine ? '지정됨' : '출제자로'
+                }</button>
+              </div>`;
+            })
+            .join('');
+
+          return `<div style="margin-bottom: 18px">
+            <div class="card__label">${game.icon} ${escapeHtml(game.label)} · ${escapeHtml(
+              game.title,
+            )}</div>
+            ${rows}
+          </div>`;
+        })
+        .join('');
     }
 
     el.setterList.addEventListener('click', async (e) => {
@@ -127,9 +153,13 @@
       try {
         const res = await api('/api/admin/setter', {
           method: 'POST',
-          body: { userId: Number(btn.dataset.setter) },
+          body: { game: btn.dataset.game, userId: Number(btn.dataset.setter) },
         });
-        showMessage(el.msg, `${res.setter.displayName} 님을 출제자로 지정했어요.`, 'ok');
+        showMessage(
+          el.msg,
+          `${res.setters[res.game.key].displayName} 님을 ${res.game.label} 출제자로 지정했어요.`,
+          'ok',
+        );
       } catch (err) {
         showMessage(el.msg, err.message);
       }

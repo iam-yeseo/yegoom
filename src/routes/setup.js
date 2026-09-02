@@ -1,6 +1,7 @@
 import {
   fail, hashPassword, json, normalizeAvatar, normalizeNickname, readJson, timingSafeEqual,
 } from '../lib/util.js';
+import { gameKeyOf } from '../lib/games.js';
 import { assignSetterStatements } from '../lib/setter.js';
 
 /**
@@ -10,7 +11,8 @@ import { assignSetterStatements } from '../lib/setter.js';
  *
  * body: { users: [{ username, displayName, avatar, role: 'player'|'admin', setter, password }] }
  * 이미 있는 아이디면 이름/역할/비밀번호를 덮어쓴다.
- * setter: true 인 계정이 출제자가 된다 (항상 한 명이므로 마지막 하나만 남는다).
+ * setter 에 'morning' 또는 'evening' 을 적으면 그 게임의 출제자가 된다
+ * (게임마다 한 명이므로 같은 게임을 여럿이 적었으면 마지막 하나만 남는다).
  */
 export async function onRequestPost(context) {
   const expected = context.env.SETUP_TOKEN;
@@ -40,7 +42,12 @@ export async function onRequestPost(context) {
     const avatar = avatarInput.value;
 
     if (password.length < 3) return fail(400, `'${username}' 의 비밀번호는 3자 이상이어야 합니다.`);
-    if (u.setter === true && role === 'admin') {
+
+    const setterGame = gameKeyOf(u.setter);
+    if (u.setter && !setterGame) {
+      return fail(400, `'${username}': setter 는 'morning' 또는 'evening' 이어야 합니다.`);
+    }
+    if (setterGame && role === 'admin') {
       return fail(400, `'${username}': 운영자는 출제자가 될 수 없습니다.`);
     }
 
@@ -58,16 +65,19 @@ export async function onRequestPost(context) {
       .bind(username, displayName, avatar, role, hash, salt)
       .run();
 
-    created.push({ username, displayName, avatar, role, setter: u.setter === true });
+    created.push({ username, displayName, avatar, role, setter: setterGame });
   }
 
-  // 출제자는 항상 한 명 — 마지막으로 지정된 계정으로 갈아 끼운다
-  const setterName = created.filter((u) => u.setter).at(-1)?.username;
-  if (setterName) {
+  // 게임마다 출제자는 한 명 — 마지막으로 지정된 계정으로 갈아 끼운다
+  const statements = [];
+  for (const game of ['morning', 'evening']) {
+    const name = created.filter((u) => u.setter === game).at(-1)?.username;
+    if (!name) continue;
     const row = await context.env.DB.prepare(`SELECT id FROM users WHERE username = ?`)
-      .bind(setterName).first();
-    await context.env.DB.batch(assignSetterStatements(context.env.DB, row?.id ?? null));
+      .bind(name).first();
+    if (row) statements.push(...assignSetterStatements(context.env.DB, game, row.id));
   }
+  if (statements.length) await context.env.DB.batch(statements);
 
   return json({ ok: true, users: created });
 }

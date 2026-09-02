@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0d1020" />
-  <title>랭킹 · 퇴근시간 맞히기</title>
+  <title>랭킹 · 기상 · 퇴근시간 맞히기</title>
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>" />
 </head>
 <body>
   <div class="app">
@@ -17,11 +17,22 @@
 
     <h1 class="page-title">
       누적 랭킹
-      <span>점수 합계 순 · 동점이면 정확히 맞힌 횟수, 그다음 평균 오차 순</span>
+      <span id="subtitle">점수 합계 순 · 동점이면 정확히 맞힌 횟수, 그다음 평균 오차 순</span>
     </h1>
 
+    <!-- 두 게임을 합쳐서, 또는 한 게임만 따로 볼 수 있다 -->
+    <div class="segmented" role="tablist" aria-label="게임 고르기" id="scope">
+      <button class="segmented__item" type="button" role="tab" data-scope="" aria-selected="true">
+        전체
+      </button>
+      <button class="segmented__item" type="button" role="tab" data-scope="morning"
+              aria-selected="false">🌅 오전</button>
+      <button class="segmented__item" type="button" role="tab" data-scope="evening"
+              aria-selected="false">🌆 오후</button>
+    </div>
+
     <section class="card">
-      <div class="card__label">순위</div>
+      <div class="card__label" id="ranking-label">순위</div>
       <div id="ranking">
         <div class="skeleton"></div>
         <div class="skeleton" style="width: 75%"></div>
@@ -39,86 +50,124 @@
 
   <script type="module">
     import {
-      api, avatarOf, escapeHtml, formatShortDate, personChip, renderTabbar, requireLogin,
+      GAMES, api, avatarOf, escapeHtml, formatShortDate, personChip, renderTabbar, requireLogin,
       roundLabel, startClock,
     } from '/js/common.js';
 
     const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
+    const el = {
+      subtitle: document.getElementById('subtitle'),
+      scope: document.getElementById('scope'),
+      rankingLabel: document.getElementById('ranking-label'),
+      ranking: document.getElementById('ranking'),
+      history: document.getElementById('history'),
+    };
+
     startClock();
     const user = await requireLogin();
     renderTabbar(user);
 
+    let scope = '';   // '' 이면 두 게임 합산
+
     function renderRanking(ranking) {
-      return ranking.length
-        ? ranking
-            .map((r) => {
-              const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
-              const meta = r.played
-                ? `${r.played}회차 참가 · 정확 ${r.exacts}회 · 1등 ${r.wins}회 · 평균 ${r.avgDiffText}`
-                : '아직 참가 기록이 없어요';
-              return `<div class="rank">
-                <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
-                <div class="rank__avatar" aria-hidden="true">${avatarOf(r)}</div>
-                <div class="rank__body">
-                  <div class="rank__name">${escapeHtml(r.displayName)} ${me}</div>
-                  <div class="rank__meta">${escapeHtml(meta)}</div>
-                </div>
-                <div class="rank__wins"><b>${r.score}</b><span>점</span></div>
-              </div>`;
-            })
-            .join('')
-        : '<p class="muted center">아직 등록된 플레이어가 없어요.</p>';
+      if (!ranking.length) return '<p class="muted center">아직 등록된 플레이어가 없어요.</p>';
+
+      return ranking
+        .map((r) => {
+          const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
+          // 합산으로 볼 때는 게임별 점수도 함께 적어 준다
+          const split = scope
+            ? ''
+            : ` · 🌅 ${r.morningScore}점 / 🌆 ${r.eveningScore}점`;
+          const meta = r.played
+            ? `${r.played}회차 참가 · 정확 ${r.exacts}회 · 1등 ${r.wins}회 · 평균 ${r.avgDiffText}${split}`
+            : '아직 참가 기록이 없어요';
+          return `<div class="rank">
+            <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
+            <div class="rank__avatar" aria-hidden="true">${avatarOf(r)}</div>
+            <div class="rank__body">
+              <div class="rank__name">${escapeHtml(r.displayName)} ${me}</div>
+              <div class="rank__meta">${escapeHtml(meta)}</div>
+            </div>
+            <div class="rank__wins"><b>${r.score}</b><span>점</span></div>
+          </div>`;
+        })
+        .join('');
     }
 
     function renderHistory(history) {
-      return history.length
-        ? history
-            .map((h) => {
-              const voided = h.status !== 'settled';
-              const head = voided ? '게임 없음' : escapeHtml(roundLabel(h.roundNo));
-              // 출제자와 1등은 프로필 사진까지 함께 보여 준다
-              const setter = h.setter ? ` · 출제 ${personChip(h.setter)}` : '';
-              const top = h.entries.filter((e) => e.isWinner).map((e) => personChip(e));
-              const scored = h.entries
-                .filter((e) => e.score > 0)
-                .map((e) => `${e.displayName} ${e.scoreText}`);
+      if (!history.length) return '<p class="muted center">아직 끝난 회차가 없어요.</p>';
 
-              return `<div class="history-item${voided ? ' history-item--void' : ''}">
-                <div class="history-item__head">
-                  <span class="history-item__date">
-                    ${escapeHtml(formatShortDate(h.date))} · ${head}${setter}
-                  </span>
-                  <span class="history-item__answer">${voided ? '—' : escapeHtml(h.answer)}</span>
-                </div>
-                <div class="history-item__winners">${
-                  voided
-                    ? '정답이 등록되지 않아 회차로 세지 않았어요.'
-                    : top.length
-                      ? `🏆 ${top.join(', ')}${
-                          scored.length ? ` · ${escapeHtml(scored.join(' / '))}` : ''
-                        }`
-                      : '참가자 없음'
-                }</div>
-              </div>`;
-            })
-            .join('')
-        : '<p class="muted center">아직 끝난 회차가 없어요.</p>';
+      return history
+        .map((h) => {
+          const voided = h.status !== 'settled';
+          const head = voided ? '게임 없음' : escapeHtml(roundLabel(h.roundNo));
+          // 합산으로 볼 때는 어느 게임이었는지 표시한다
+          const badge = scope ? '' : `<span class="tag">${escapeHtml(h.game.short)}</span> `;
+          // 출제자와 1등은 프로필 사진까지 함께 보여 준다
+          const setter = h.setter ? ` · 출제 ${personChip(h.setter)}` : '';
+          const top = h.entries.filter((e) => e.isWinner).map((e) => personChip(e));
+          const scored = h.entries
+            .filter((e) => e.score > 0)
+            .map((e) => `${e.displayName} ${e.scoreText}`);
+
+          return `<div class="history-item${voided ? ' history-item--void' : ''}">
+            <div class="history-item__head">
+              <span class="history-item__date">
+                ${badge}${escapeHtml(formatShortDate(h.date))} · ${head}${setter}
+              </span>
+              <span class="history-item__answer">${voided ? '—' : escapeHtml(h.answer)}</span>
+            </div>
+            <div class="history-item__winners">${
+              voided
+                ? '정답이 기록되지 않아 회차로 세지 않았어요.'
+                : top.length
+                  ? `🏆 ${top.join(', ')}${
+                      scored.length ? ` · ${escapeHtml(scored.join(' / '))}` : ''
+                    }`
+                  : '참가자 없음'
+            }</div>
+          </div>`;
+        })
+        .join('');
     }
 
-    // 네트워크가 끊겨도 스켈레톤만 남지 않도록 실패를 화면에 보여 준다
-    try {
-      const [{ ranking }, { history }] = await Promise.all([
-        api('/api/ranking'),
-        api('/api/history'),
-      ]);
-      document.getElementById('ranking').innerHTML = renderRanking(ranking);
-      document.getElementById('history').innerHTML = renderHistory(history);
-    } catch (err) {
-      const msg = `<p class="muted center">불러오지 못했습니다.<br />${escapeHtml(err.message)}</p>`;
-      document.getElementById('ranking').innerHTML = msg;
-      document.getElementById('history').innerHTML = msg;
+    async function load() {
+      const query = scope ? `?game=${scope}` : '';
+      const game = GAMES[scope];
+
+      el.rankingLabel.textContent = game ? `순위 · ${game.label}` : '순위 · 오전 + 오후';
+      el.subtitle.textContent = game
+        ? `${game.title} 기록만 셉니다. 이 게임의 출제자는 빠져요.`
+        : '두 게임의 점수를 합쳐서 셉니다.';
+
+      // 네트워크가 끊겨도 스켈레톤만 남지 않도록 실패를 화면에 보여 준다
+      try {
+        const [{ ranking }, { history }] = await Promise.all([
+          api(`/api/ranking${query}`),
+          api(`/api/history${query}`),
+        ]);
+        el.ranking.innerHTML = renderRanking(ranking);
+        el.history.innerHTML = renderHistory(history);
+      } catch (err) {
+        const msg = `<p class="muted center">불러오지 못했습니다.<br />${escapeHtml(err.message)}</p>`;
+        el.ranking.innerHTML = msg;
+        el.history.innerHTML = msg;
+      }
     }
+
+    el.scope.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-scope]');
+      if (!btn || btn.dataset.scope === scope) return;
+      scope = btn.dataset.scope;
+      for (const item of el.scope.querySelectorAll('[data-scope]')) {
+        item.setAttribute('aria-selected', String(item.dataset.scope === scope));
+      }
+      load();
+    });
+
+    await load();
   </script>
 </body>
 </html>

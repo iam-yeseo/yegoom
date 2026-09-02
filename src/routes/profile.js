@@ -2,6 +2,7 @@ import {
   fail, json, NICKNAME_MAX, normalizeAvatar, normalizeNickname, personOf, readJson, requireUser,
 } from '../lib/util.js';
 import { MAX_PHOTO_SIDE, normalizePhoto } from '../lib/image.js';
+import { userWithSetterGames } from '../lib/setter.js';
 
 /**
  * 닉네임 · 프로필 글자 · 프로필 사진을 바꾼다. 보낸 것만 바뀐다.
@@ -72,7 +73,7 @@ export async function onRequestPost(context) {
   await db.batch(statements);
 
   const row = await db.prepare(
-    `SELECT id, username, display_name, avatar, photo_version, role, is_setter
+    `SELECT id, username, display_name, avatar, photo_version, role
        FROM users WHERE id = ?`,
   ).bind(user.id).first();
 
@@ -80,6 +81,6 @@ export async function onRequestPost(context) {
     ok: true,
     nicknameMax: NICKNAME_MAX,
     photoMaxSide: MAX_PHOTO_SIDE,
-    user: personOf(row, { role: row.role, isSetter: row.is_setter === 1 }),
+    user: await userWithSetterGames(db, personOf(row, { role: row.role })),
   });
 }

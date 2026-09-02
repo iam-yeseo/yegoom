@@ -2,7 +2,7 @@
   "name": "toigeun-game",
   "version": "1.0.0",
   "private": true,
-  "description": "퇴근시간 맞히기 — Cloudflare Workers + D1 로 만든 모바일 웹앱",
+  "description": "기상 · 퇴근시간 맞히기 — Cloudflare Workers + D1 로 만든 모바일 웹앱 (오전/오후 두 게임)",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

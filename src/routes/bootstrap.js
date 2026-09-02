@@ -1,9 +1,12 @@
 import { fail, json, timingSafeEqual } from '../lib/util.js';
 import { migrate, pendingMigrations } from '../lib/migrate.js';
 import { SEED_USERS } from '../lib/seed.js';
+import { gameKeyOf } from '../lib/games.js';
+import { assignSetterStatements } from '../lib/setter.js';
 
 /**
- * 최초 1회 초기 설정 — 테이블을 만들고 계정 5개(플레이어 3 + 출제자 1 + 운영자 1)를 넣는다.
+ * 최초 1회 초기 설정 — 테이블을 만들고 계정 5개(플레이어 4 + 운영자 1)를 넣고,
+ * 게임별 출제자(오전 · 오후)를 지정한다.
  *
  * wrangler CLI 없이 브라우저에서 끝낼 수 있게 만든 엔드포인트라, 아무나 못 쓰도록
  * 두 겹으로 막는다.
@@ -51,18 +54,28 @@ export async function onRequestPost(context) {
   // 1. 테이블 (이미 있으면 그대로 두고, 예전 스키마면 새 모양으로 옮긴다)
   await migrate(db);
 
-  // 2. 계정 (출제자 표시까지 함께 들어간다)
+  // 2. 계정
   await db.batch(
     SEED_USERS.map((u) =>
       db
         .prepare(
-          `INSERT INTO users (username, display_name, avatar, role, is_setter, password_hash, password_salt)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(username) DO NOTHING`,
         )
-        .bind(u.username, u.displayName, u.avatar, u.role, u.setter ? 1 : 0, u.hash, u.salt),
+        .bind(u.username, u.displayName, u.avatar, u.role, u.hash, u.salt),
     ),
   );
+
+  // 3. 게임별 출제자 — 시드의 setter 값('morning' / 'evening')대로 지정한다
+  const statements = [];
+  for (const u of SEED_USERS) {
+    const game = gameKeyOf(u.setter);
+    if (!game) continue;
+    const row = await db.prepare(`SELECT id FROM users WHERE username = ?`).bind(u.username).first();
+    if (row) statements.push(...assignSetterStatements(db, game, row.id));
+  }
+  if (statements.length) await db.batch(statements);
 
   const after = await readStatus(db);
   return json({ ok: true, created: true, ...after });
@@ -73,12 +86,22 @@ async function readStatus(db) {
   try {
     // avatar 컬럼이 없는 예전 DB 도 상태만은 읽을 수 있게 한다
     const { results } = await db.prepare(`SELECT * FROM users ORDER BY id`).all();
+
+    // game_setters 는 스키마를 옮기기 전이면 아직 없을 수 있다
+    let setters = [];
+    try {
+      const rows = await db.prepare(`SELECT game, user_id FROM game_setters`).all();
+      setters = rows.results ?? [];
+    } catch {
+      /* 아직 표가 없으면 출제자 표시만 비워 둔다 */
+    }
+
     const users = (results ?? []).map((u) => ({
       username: u.username,
       displayName: u.display_name,
       avatar: u.avatar ?? '🙂',
       role: u.role,
-      isSetter: u.is_setter === 1,
+      setterGames: setters.filter((s) => s.user_id === u.id).map((s) => s.game),
     }));
     return { ready: users.length > 0, userCount: users.length, users };
   } catch {
