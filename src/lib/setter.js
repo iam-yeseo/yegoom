@@ -3,21 +3,17 @@
 // 운영자(admin)는 정답을 등록만 하고, 출제자는 예측을 낼 수 없으며 랭킹에도
 // 들어가지 않는다. 항상 한 명만 지정되도록 users.is_setter 를 한 번에 갈아 끼운다.
 
+import { personOf } from './util.js';
+
 /** 지금 지정된 출제자. 아직 없으면 null */
 export async function getSetter(db) {
   const row = await db
     .prepare(
-      `SELECT id, username, display_name, avatar FROM users
+      `SELECT id, username, display_name, avatar, photo_version FROM users
         WHERE is_setter = 1 AND role = 'player' ORDER BY id LIMIT 1`,
     )
     .first();
-  if (!row) return null;
-  return {
-    id: row.id,
-    username: row.username,
-    displayName: row.display_name,
-    avatar: row.avatar ?? '🙂',
-  };
+  return personOf(row);
 }
 
 /**

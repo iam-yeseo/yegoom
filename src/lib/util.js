@@ -125,6 +125,33 @@ export function normalizeAvatar(input) {
   return { value };
 }
 
+/* ---------------- 프로필 사진 ---------------- */
+
+/**
+ * 프로필 사진 주소. 아직 사진을 올리지 않았으면 null 이라 화면은 이모지로 돌아간다.
+ * 판 번호(v)를 붙여 두면 사진을 바꿨을 때 브라우저가 알아서 새로 받아 간다.
+ */
+export function photoUrl(userId, version) {
+  const v = Number(version ?? 0);
+  return Number.isFinite(v) && v > 0 ? `/api/avatar?u=${userId}&v=${v}` : null;
+}
+
+/**
+ * users 행을 화면에 내려 줄 모양으로 다듬는다.
+ * 사진 주소까지 한자리에서 붙이므로 라우트마다 규칙이 갈리지 않는다.
+ */
+export function personOf(row, extra = {}) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    username: row.username,
+    displayName: row.display_name,
+    avatar: row.avatar ?? '🙂',
+    photoUrl: photoUrl(row.id, row.photo_version),
+    ...extra,
+  };
+}
+
 /* ---------------- 비밀번호 해싱 (PBKDF2-SHA256) ---------------- */
 
 const PBKDF2_ITERATIONS = 100_000;
@@ -205,14 +232,7 @@ export async function getUser(context) {
     .bind(token)
     .first();
   if (!row) return null;
-  return {
-    id: row.id,
-    username: row.username,
-    displayName: row.display_name,
-    avatar: row.avatar ?? '🙂',
-    role: row.role,
-    isSetter: row.is_setter === 1,
-  };
+  return personOf(row, { role: row.role, isSetter: row.is_setter === 1 });
 }
 
 /** 로그인 필수 라우트용. 미로그인이면 401 Response 를 반환 */

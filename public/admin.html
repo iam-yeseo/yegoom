@@ -29,8 +29,7 @@
 
     <section class="card">
       <div class="card__label" id="answer-label">오늘 실제 퇴근한 시간 · 초까지</div>
-      <input id="answer-input" class="time-input" type="time" step="1" value="18:00:00"
-             aria-label="정답 퇴근시간 (초까지)" />
+      <div id="answer-input"></div>
       <button id="reveal" class="btn" type="button" style="margin-top: 12px">
         정답 공개하기
       </button>
@@ -41,7 +40,13 @@
 
     <section class="card">
       <div class="card__label">출제자</div>
-      <p style="margin: 0 0 12px" id="setter-text">불러오는 중…</p>
+      <div class="profile-preview" id="setter-profile" style="margin-bottom: 14px; padding-bottom: 14px">
+        <div class="profile-preview__avatar" id="setter-avatar" aria-hidden="true">🙂</div>
+        <div>
+          <div class="profile-preview__name" id="setter-name">&nbsp;</div>
+          <div class="muted" style="font-size: 13px" id="setter-text">불러오는 중…</div>
+        </div>
+      </div>
       <a class="btn btn--ghost" href="/setup">출제자 바꾸기</a>
     </section>
 
@@ -74,6 +79,7 @@
     import {
       api, avatarOf, escapeHtml, renderTabbar, requireLogin, roundLabel, showMessage, startClock,
     } from '/js/common.js';
+    import { createTimeInput } from '/js/time-input.js';
 
     const el = {
       roundBadge: document.getElementById('round-badge'),
@@ -81,8 +87,10 @@
       subtitle: document.getElementById('subtitle'),
       msg: document.getElementById('msg'),
       answerLabel: document.getElementById('answer-label'),
+      setterProfile: document.getElementById('setter-profile'),
+      setterAvatar: document.getElementById('setter-avatar'),
+      setterName: document.getElementById('setter-name'),
       setterText: document.getElementById('setter-text'),
-      input: document.getElementById('answer-input'),
       reveal: document.getElementById('reveal'),
       revealedBox: document.getElementById('revealed-box'),
       revealedText: document.getElementById('revealed-text'),
@@ -97,8 +105,14 @@
     const user = await requireLogin({ adminOnly: true });
     renderTabbar(user);
 
+    // 정답도 초까지 받아야 해서 예측 화면과 같은 키패드 입력칸을 쓴다
+    const answerInput = createTimeInput(document.getElementById('answer-input'), {
+      value: '18:00:00',
+      label: '정답 퇴근시간',
+    });
+
     async function submitAnswer(confirmText) {
-      const time = el.input.value;
+      const time = answerInput.value;
       if (!time) return showMessage(el.msg, '정답 시간을 입력해 주세요.');
       if (confirmText && !confirm(confirmText.replace('{time}', time))) return;
 
@@ -152,14 +166,17 @@
         ? '정답 공개됨'
         : `${submitted}/${state.players.length}명 확정 · 공개 대기 중`;
 
-      const setterName = state.setter
-        ? `${state.setter.avatar} ${state.setter.displayName}`
-        : null;
-      el.answerLabel.textContent = setterName
-        ? `${setterName} 님이 실제 퇴근한 시간 · 초까지`
+      // 출제자는 사진과 함께 보여 준다 (누구 퇴근시간을 적는 건지 헷갈리지 않게)
+      el.setterProfile.classList.toggle('hidden', !state.setter);
+      if (state.setter) {
+        el.setterAvatar.innerHTML = avatarOf(state.setter);
+        el.setterName.textContent = state.setter.displayName;
+      }
+      el.answerLabel.textContent = state.setter
+        ? `${state.setter.displayName} 님이 실제 퇴근한 시간 · 초까지`
         : '오늘 실제 퇴근한 시간 · 초까지';
-      el.setterText.textContent = setterName
-        ? `${setterName} 님의 퇴근시간을 맞히는 게임입니다.`
+      el.setterText.textContent = state.setter
+        ? '이 사람의 퇴근시간을 맞히는 게임입니다.'
         : '아직 출제자가 지정되지 않았습니다. 지정해야 게임이 시작됩니다.';
 
       el.revealedBox.classList.toggle('hidden', !state.revealed);
@@ -174,7 +191,7 @@
       }
 
       if (state.revealed) {
-        el.input.value = state.answer;
+        answerInput.value = state.answer;
         const winners = state.players.filter((p) => p.isWinner).map((p) => p.displayName);
         el.revealedText.innerHTML = `${escapeHtml(roundLabel(state.roundNo))} 정답은
           <b>${escapeHtml(state.answer)}</b> 입니다.<br />

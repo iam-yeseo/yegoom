@@ -1,5 +1,5 @@
 import {
-  fail, hashPassword, json, randomHex, readJson,
+  fail, hashPassword, json, personOf, randomHex, readJson,
   sessionCookie, SESSION_DAYS, timingSafeEqual,
 } from '../lib/util.js';
 
@@ -38,14 +38,7 @@ export async function onRequestPost(context) {
   return json(
     {
       ok: true,
-      user: {
-        id: user.id,
-        username: user.username,
-        displayName: user.display_name,
-        avatar: user.avatar ?? '🙂',
-        role: user.role,
-        isSetter: user.is_setter === 1,
-      },
+      user: personOf(user, { role: user.role, isSetter: user.is_setter === 1 }),
     },
     { headers: { 'set-cookie': sessionCookie(token, context.request) } },
   );

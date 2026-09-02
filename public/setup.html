@@ -54,7 +54,7 @@
   </main>
 
   <script type="module">
-    import { api, escapeHtml, showMessage } from '/js/common.js';
+    import { api, avatarOf, escapeHtml, showMessage } from '/js/common.js';
 
     const el = {
       msg: document.getElementById('msg'),
@@ -73,7 +73,7 @@
       return users
         .map(
           (u) => `<div class="player">
-            <div class="player__avatar" aria-hidden="true">${escapeHtml(u.avatar ?? u.displayName.charAt(0))}</div>
+            <div class="player__avatar" aria-hidden="true">${avatarOf(u)}</div>
             <div class="player__body">
               <div class="player__name">${escapeHtml(u.displayName)}</div>
               <div class="player__meta">${escapeHtml(u.username)} · ${
@@ -103,7 +103,7 @@
         ? data.candidates
             .map(
               (u) => `<div class="player">
-                <div class="player__avatar" aria-hidden="true">${escapeHtml(u.avatar)}</div>
+                <div class="player__avatar" aria-hidden="true">${avatarOf(u)}</div>
                 <div class="player__body">
                   <div class="player__name">${escapeHtml(u.displayName)}${
                     u.isSetter ? '<span class="tag tag--win">출제자</span>' : ''

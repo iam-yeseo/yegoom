@@ -6,6 +6,7 @@
 
 import * as adminAnswer from './routes/admin-answer.js';
 import * as adminSetter from './routes/admin-setter.js';
+import * as avatar from './routes/avatar.js';
 import * as bootstrap from './routes/bootstrap.js';
 import * as guess from './routes/guess.js';
 import * as history from './routes/history.js';
@@ -25,6 +26,7 @@ const ROUTES = new Map([
   ['/api/login', login],
   ['/api/logout', logout],
   ['/api/me', me],
+  ['/api/avatar', avatar],
   ['/api/today', today],
   ['/api/guess', guess],
   ['/api/ranking', ranking],

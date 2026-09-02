@@ -9,11 +9,20 @@ CREATE TABLE IF NOT EXISTS users (
      username      TEXT    NOT NULL UNIQUE,
      display_name  TEXT    NOT NULL,
      avatar        TEXT    NOT NULL DEFAULT '🙂',
+     photo_version INTEGER NOT NULL DEFAULT 0,
      role          TEXT    NOT NULL CHECK (role IN ('player', 'admin')),
      is_setter     INTEGER NOT NULL DEFAULT 0,
      password_hash TEXT    NOT NULL,
      password_salt TEXT    NOT NULL,
      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+   );
+
+CREATE TABLE IF NOT EXISTS user_photos (
+     user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+     mime       TEXT    NOT NULL,
+     size       INTEGER NOT NULL,
+     data       TEXT    NOT NULL,
+     updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
    );
 
 CREATE TABLE IF NOT EXISTS sessions (
