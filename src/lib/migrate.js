@@ -4,7 +4,8 @@
 // 판단하기 때문에, 한 번 옮기고 나면 조건이 저절로 거짓이 된다.
 //
 // 옮기는 내용
-//   users   : avatar / is_setter 컬럼 추가
+//   users   : avatar / is_setter / photo_version 컬럼 추가
+//   사진     : user_photos 표 추가 (프로필 사진 한 사람당 한 장)
 //   rounds  : answer_minutes -> answer_seconds, status/round_no/closed_at/setter_user_id 추가
 //   guesses : guess_minutes  -> guess_seconds
 //   results : diff(분)       -> diff_seconds, score 추가
@@ -48,6 +49,7 @@ export async function pendingMigrations(db) {
 
   if (!users.includes('avatar')) pending.push('users.avatar');
   if (!users.includes('is_setter')) pending.push('users.is_setter');
+  if (!users.includes('photo_version')) pending.push('users.photo_version');
 
   const rounds = await columnsOf(db, 'rounds');
   if (rounds.includes('answer_minutes')) pending.push('rounds.answer_seconds');
@@ -89,6 +91,12 @@ export async function migrate(db) {
   if (userCols.length && !userCols.includes('is_setter')) {
     await db.prepare(`ALTER TABLE users ADD COLUMN is_setter INTEGER NOT NULL DEFAULT 0`).run();
     applied.push('users.is_setter');
+  }
+  // 프로필 사진의 판 번호. 0 이면 아직 사진이 없다는 뜻이라 기존 계정은 그대로 이모지를 쓴다.
+  // (사진을 담는 user_photos 표 자체는 0단계에서 이미 만들어졌다.)
+  if (userCols.length && !userCols.includes('photo_version')) {
+    await db.prepare(`ALTER TABLE users ADD COLUMN photo_version INTEGER NOT NULL DEFAULT 0`).run();
+    applied.push('users.photo_version');
   }
 
   // 2. rounds — 컬럼이 여럿 바뀌므로 새 테이블로 옮겨 담는다

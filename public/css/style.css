@@ -100,7 +100,9 @@ body {
   letter-spacing: -0.02em;
 }
 
-.page-title span { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 3px; }
+/* 부제만 아래 줄로 내린다. 자식 선택자로 좁혀 두지 않으면 제목 안에 끼워 넣은
+   프로필 칩(<span>)까지 줄바꿈돼 이름과 문장이 따로 놀게 된다. */
+.page-title > span { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 3px; }
 
 /* 제목 본문 자체를 스크립트로 갈아 끼우는 페이지용 — 부제 스타일을 물려받지 않는다 */
 .page-title .page-title__main {
@@ -140,7 +142,6 @@ label.field > span { display: block; font-size: 13px; color: var(--muted); margi
 
 input[type='text'],
 input[type='password'],
-input[type='time'],
 input[type='date'] {
   width: 100%;
   padding: 14px;
@@ -159,37 +160,85 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(255, 144, 87, 0.18);
 }
 
-input[type='time'], input[type='date'] {
+input[type='date'] {
   color-scheme: dark;
-  /* iOS Safari 는 시간/날짜 입력에 자체 내장 너비를 줘서 컨테이너를 넘길 수 있다.
+  /* iOS Safari 는 날짜 입력에 자체 내장 너비를 줘서 컨테이너를 넘길 수 있다.
      기본 스타일을 끄고 줄어들 수 있게 만든다. */
   -webkit-appearance: none;
   appearance: none;
   min-width: 0;
 }
 
+/* ---------- 시 · 분 · 초 입력 (숫자 키패드) ----------
+   모바일의 기본 시간 선택기는 초를 못 고르거나 다루기 힘든 휠로만 준다.
+   초까지 맞히는 게임이라 칸 세 개에 직접 찍어 넣는 방식으로 바꿨다. */
+
 .time-input {
-  /* 화면 폭에 따라 줄어들어, 좁은 기기나 12시간 표기('오후 6:00')에서도 넘치지 않는다 */
-  font-size: clamp(26px, 8.5vw, 34px) !important;
-  font-weight: 800;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-  padding: 16px 12px !important;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 8px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-/* iOS Safari 는 값을 별도 박스로 그려서 input 의 text-align 이 먹지 않는다.
-   기본 마진 때문에 값이 오른쪽으로 밀리고, 글자가 크면 그대로 넘친다. */
-.time-input::-webkit-date-and-time-value {
+.time-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 144, 87, 0.18);
+}
+
+.time-input--disabled { opacity: 0.5; }
+
+.time-input__slot {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.time-input__field {
   width: 100%;
-  margin: 0;
+  padding: 4px 0 0;
+  /* 화면 폭에 따라 줄어들어 좁은 기기에서도 넘치지 않는다 */
+  font-size: clamp(28px, 9vw, 36px);
+  font-weight: 800;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
   text-align: center;
+  color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 8px;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* 데스크톱 크로뮴만 시계 아이콘을 그려서 값을 왼쪽으로 밀어낸다.
-   iOS 에는 없는 아이콘이라, 숨겨야 두 플랫폼이 같은 모양이 된다.
-   모바일에서는 입력칸을 누르면 어차피 기본 시간 선택기가 열린다. */
-.time-input::-webkit-calendar-picker-indicator {
-  display: none;
+.time-input__field::placeholder { color: var(--muted); opacity: 0.45; }
+.time-input__field::selection { background: rgba(255, 144, 87, 0.35); }
+
+.time-input__field:focus {
+  background: rgba(255, 144, 87, 0.12);
+  box-shadow: none;
+}
+
+.time-input__unit {
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.time-input__colon {
+  align-self: center;
+  padding-bottom: 14px;
+  font-size: clamp(22px, 7vw, 28px);
+  font-weight: 800;
+  color: var(--muted);
 }
 
 .btn {
@@ -301,6 +350,44 @@ input[type='time'], input[type='date'] {
 .rules li:first-child { border-top: none; padding-top: 0; }
 .rules b { flex: 0 0 46px; color: var(--accent-2); font-variant-numeric: tabular-nums; }
 
+/* ---------- 프로필 사진 ---------- */
+
+/* 아바타가 들어가는 칸(.player__avatar 등)은 크기와 모서리를 각자 정한다.
+   사진은 그 칸을 그대로 채우기만 하면 되므로 모서리를 물려받는다. */
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+/* 글 사이에 끼워 넣는 작은 프로필 칸 */
+.avatar-chip {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+  line-height: 1;
+  vertical-align: -5px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.avatar-chip--lg {
+  width: 30px;
+  height: 30px;
+  font-size: 17px;
+  border-radius: 10px;
+  vertical-align: -8px;
+}
+
+.person-chip { display: inline-flex; align-items: center; gap: 6px; }
+
 /* ---------- 프로필 편집 ---------- */
 
 .profile-preview {
@@ -319,6 +406,7 @@ input[type='time'], input[type='date'] {
   width: 58px;
   height: 58px;
   font-size: 28px;
+  overflow: hidden;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -331,6 +419,92 @@ input[type='time'], input[type='date'] {
   font-size: 24px !important;
   padding: 12px !important;
 }
+
+/* 사진 고르기 — 정방형 미리보기 + 버튼 두 개 */
+.photo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.photo-preview {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;         /* 가로세로가 같아 정방형 결과가 그대로 보인다 */
+  font-size: 38px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+
+.photo-actions { flex: 1 1 auto; min-width: 0; display: grid; gap: 8px; }
+.photo-actions .btn { padding: 11px 12px; font-size: 14px; }
+
+/* 파일 선택 입력은 눈에 보이지 않게 두고 버튼으로 대신 연다 */
+.photo-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* ---------- 사진 자르기 화면 ---------- */
+
+.no-scroll { overflow: hidden; }
+
+.cropper {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(6, 8, 18, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.cropper__sheet {
+  width: 100%;
+  max-width: 380px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.cropper__title { font-size: 16px; font-weight: 800; margin-bottom: 12px; text-align: center; }
+
+.cropper__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  width: fit-content;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+
+/* 손가락으로 끌 때 화면이 같이 스크롤되지 않게 한다 */
+.cropper__canvas { display: block; touch-action: none; cursor: grab; }
+.cropper__canvas:active { cursor: grabbing; }
+
+/* 잘릴 영역을 알려 주는 테두리 (마우스 이벤트는 캔버스로 통과시킨다) */
+.cropper__mask {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 2px solid rgba(255, 209, 102, 0.85);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0);
+}
+
+.cropper__zoom { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; }
+.cropper__zoom span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.cropper__zoom input { flex: 1; accent-color: var(--accent); }
+
+.cropper__hint { margin: 4px 0 14px; font-size: 13px; color: var(--muted); text-align: center; }
 
 /* ---------- 알림 메시지 ---------- */
 
@@ -367,6 +541,7 @@ input[type='time'], input[type='date'] {
   font-size: 20px;
   font-weight: 800;
   color: var(--text);
+  overflow: hidden;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -456,6 +631,7 @@ input[type='time'], input[type='date'] {
   width: 36px;
   height: 36px;
   font-size: 18px;
+  overflow: hidden;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 12px;

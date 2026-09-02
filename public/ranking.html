@@ -39,7 +39,8 @@
 
   <script type="module">
     import {
-      api, avatarOf, escapeHtml, formatShortDate, renderTabbar, requireLogin, roundLabel, startClock,
+      api, avatarOf, escapeHtml, formatShortDate, personChip, renderTabbar, requireLogin,
+      roundLabel, startClock,
     } from '/js/common.js';
 
     const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
@@ -76,12 +77,9 @@
             .map((h) => {
               const voided = h.status !== 'settled';
               const head = voided ? '게임 없음' : escapeHtml(roundLabel(h.roundNo));
-              const setter = h.setter
-                ? ` · 출제 ${escapeHtml(`${h.setter.avatar} ${h.setter.displayName}`)}`
-                : '';
-              const top = h.entries
-                .filter((e) => e.isWinner)
-                .map((e) => `${e.avatar} ${e.displayName}`);
+              // 출제자와 1등은 프로필 사진까지 함께 보여 준다
+              const setter = h.setter ? ` · 출제 ${personChip(h.setter)}` : '';
+              const top = h.entries.filter((e) => e.isWinner).map((e) => personChip(e));
               const scored = h.entries
                 .filter((e) => e.score > 0)
                 .map((e) => `${e.displayName} ${e.scoreText}`);
@@ -97,7 +95,7 @@
                   voided
                     ? '정답이 등록되지 않아 회차로 세지 않았어요.'
                     : top.length
-                      ? `🏆 ${escapeHtml(top.join(', '))}${
+                      ? `🏆 ${top.join(', ')}${
                           scored.length ? ` · ${escapeHtml(scored.join(' / '))}` : ''
                         }`
                       : '참가자 없음'

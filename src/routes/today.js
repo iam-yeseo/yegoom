@@ -1,4 +1,4 @@
-import { json, requireUser, secondsToHHMMSS, todayKST } from '../lib/util.js';
+import { json, personOf, requireUser, secondsToHHMMSS, todayKST } from '../lib/util.js';
 import {
   CLOSE_LABEL, closeExpiredRounds, formatDiff, formatScore, isClosed, roundNumberFor,
 } from '../lib/game.js';
@@ -23,7 +23,7 @@ export async function onRequestGet(context) {
     ).bind(gameDate).first(),
     // 출제자는 자기 퇴근시간을 아는 사람이라 참가자 목록에서 뺀다
     db.prepare(
-      `SELECT id, username, display_name, avatar FROM users
+      `SELECT id, username, display_name, avatar, photo_version FROM users
         WHERE role = 'player' AND is_setter = 0 ORDER BY id`,
     ).all(),
     db.prepare(`SELECT user_id, guess_seconds, updated_at FROM guesses WHERE game_date = ?`)
@@ -44,17 +44,14 @@ export async function onRequestGet(context) {
 
   // 지난 회차는 그날 기록해 둔 출제자를, 진행 중인 회차는 지금 지정된 출제자를 쓴다
   const roundSetter = round?.setter_user_id
-    ? await db.prepare(`SELECT id, username, display_name, avatar FROM users WHERE id = ?`)
-        .bind(round.setter_user_id).first()
+    ? await db
+        .prepare(
+          `SELECT id, username, display_name, avatar, photo_version FROM users WHERE id = ?`,
+        )
+        .bind(round.setter_user_id)
+        .first()
     : null;
-  const setter = roundSetter
-    ? {
-        id: roundSetter.id,
-        username: roundSetter.username,
-        displayName: roundSetter.display_name,
-        avatar: roundSetter.avatar ?? '🙂',
-      }
-    : currentSetter;
+  const setter = personOf(roundSetter) ?? currentSetter;
 
   const guessByUser = new Map((guessesRes.results ?? []).map((g) => [g.user_id, g]));
   const resultByUser = new Map((resultsRes.results ?? []).map((r) => [r.user_id, r]));
@@ -65,11 +62,7 @@ export async function onRequestGet(context) {
     const result = resultByUser.get(p.id);
     const totals = totalByUser.get(p.id);
     const isMe = user?.id === p.id;
-    return {
-      id: p.id,
-      username: p.username,
-      displayName: p.display_name,
-      avatar: p.avatar ?? '🙂',
+    return personOf(p, {
       submitted: !!guess,
       totalScore: totals?.score ?? 0,
       totalWins: totals?.wins ?? 0,
@@ -81,7 +74,7 @@ export async function onRequestGet(context) {
       scoreText: revealed && result ? formatScore(result.score) : null,
       isWinner: revealed && result ? result.is_winner === 1 : false,
       isMe,
-    };
+    });
   });
 
   return json({

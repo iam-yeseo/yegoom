@@ -1,4 +1,4 @@
-import { json, requireUser } from '../lib/util.js';
+import { json, personOf, requireUser } from '../lib/util.js';
 import { closeExpiredRounds, formatDiff } from '../lib/game.js';
 
 /**
@@ -17,6 +17,7 @@ export async function onRequestGet(context) {
             u.username,
             u.display_name,
             u.avatar,
+            u.photo_version,
             COUNT(r.game_date)                                          AS played,
             COALESCE(SUM(r.score), 0)                                   AS score,
             COALESCE(SUM(CASE WHEN r.score = 3 THEN 1 ELSE 0 END), 0)   AS exacts,
@@ -36,12 +37,8 @@ export async function onRequestGet(context) {
     const key = `${row.score}|${row.exacts}|${row.avg_diff ?? 'x'}`;
     if (key !== prevKey) rank = idx + 1;   // 동률이면 같은 등수
     prevKey = key;
-    return {
+    return personOf(row, {
       rank,
-      id: row.id,
-      username: row.username,
-      displayName: row.display_name,
-      avatar: row.avatar ?? '🙂',
       played: row.played,
       score: row.score,
       exacts: row.exacts,
@@ -50,7 +47,7 @@ export async function onRequestGet(context) {
       avgDiffText: formatDiff(row.avg_diff),
       bestDiff: row.best_diff,
       bestDiffText: formatDiff(row.best_diff),
-    };
+    });
   });
 
   return json({ ok: true, ranking });

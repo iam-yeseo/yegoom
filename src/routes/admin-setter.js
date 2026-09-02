@@ -1,4 +1,4 @@
-import { fail, json, readJson, requireAdmin } from '../lib/util.js';
+import { fail, json, personOf, readJson, requireAdmin } from '../lib/util.js';
 import { assignSetterStatements, getSetter } from '../lib/setter.js';
 
 /** 출제자 후보(플레이어 전원)와 지금 지정된 출제자 */
@@ -9,7 +9,7 @@ export async function onRequestGet(context) {
   const db = context.env.DB;
   const [{ results }, setter] = await Promise.all([
     db.prepare(
-      `SELECT id, username, display_name, avatar, is_setter FROM users
+      `SELECT id, username, display_name, avatar, photo_version, is_setter FROM users
         WHERE role = 'player' ORDER BY id`,
     ).all(),
     getSetter(db),
@@ -18,13 +18,7 @@ export async function onRequestGet(context) {
   return json({
     ok: true,
     setter,
-    candidates: (results ?? []).map((u) => ({
-      id: u.id,
-      username: u.username,
-      displayName: u.display_name,
-      avatar: u.avatar ?? '🙂',
-      isSetter: u.is_setter === 1,
-    })),
+    candidates: (results ?? []).map((u) => personOf(u, { isSetter: u.is_setter === 1 })),
   });
 }
 

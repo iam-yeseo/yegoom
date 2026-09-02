@@ -144,15 +144,41 @@ export function showMessage(el, text, kind = 'error') {
 }
 
 /**
- * 프로필 자리에 넣을 한 글자.
- * 사용자가 정해 둔 avatar 를 쓰고, 없으면 닉네임 첫 글자로 대신한다.
+ * 프로필 칸 안에 넣을 내용.
+ * 사진을 올렸으면 사진을, 아니면 정해 둔 한 글자(없으면 닉네임 첫 글자)를 쓴다.
+ *
+ * 사진은 정방형으로 잘라 저장되지만, 칸 모양이 바뀌어도 찌그러지지 않도록
+ * object-fit: cover 로 채운다.
  */
 export function avatarOf(person) {
+  const photo = String(person?.photoUrl ?? '').trim();
+  if (photo) {
+    return `<img class="avatar-img" src="${escapeHtml(photo)}" alt="" loading="lazy"
+                 decoding="async" />`;
+  }
   // avatar 는 서버에서 이미 "한 글자" 로 검사해 저장하므로 그대로 쓴다
   const avatar = String(person?.avatar ?? '').trim();
   if (avatar) return escapeHtml(avatar);
   const name = String(person?.displayName ?? person ?? '?').trim();
   return escapeHtml([...name][0] ?? '?');
+}
+
+/**
+ * 글 사이에 끼워 넣는 작은 프로필 칸. 출제자 이름 앞처럼 문장 속에 쓴다.
+ * @param {string} [modifier] 크기를 바꾸는 덧클래스 (예: 'avatar-chip--lg')
+ */
+export function avatarChip(person, modifier = '') {
+  return `<span class="avatar-chip${modifier ? ` ${modifier}` : ''}" aria-hidden="true">${
+    avatarOf(person)
+  }</span>`;
+}
+
+/** "(사진) 닉네임" 한 덩어리 — 출제자를 문장 속에 적을 때 쓴다. */
+export function personChip(person, modifier = '') {
+  if (!person) return '';
+  return `<span class="person-chip">${avatarChip(person, modifier)}<b>${
+    escapeHtml(person.displayName)
+  }</b></span>`;
 }
 
 /** "18:00:00" -> "18:00:00" / "18:00" (초가 0이면 짧게) */
