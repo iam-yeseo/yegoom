@@ -4,8 +4,9 @@
 // 거기서 매칭되지 않은 요청만 이 Worker 로 넘어온다. 즉 여기서는 사실상
 // /api/* 만 다루면 된다.
 
-import * as adminAnswer from './routes/admin-answer.js';
+import * as adminRound from './routes/admin-round.js';
 import * as adminSetter from './routes/admin-setter.js';
+import * as answer from './routes/answer.js';
 import * as avatar from './routes/avatar.js';
 import * as bootstrap from './routes/bootstrap.js';
 import * as guess from './routes/guess.js';
@@ -17,6 +18,7 @@ import * as migrate from './routes/migrate.js';
 import * as password from './routes/password.js';
 import * as profile from './routes/profile.js';
 import * as ranking from './routes/ranking.js';
+import * as reveal from './routes/reveal.js';
 import * as setup from './routes/setup.js';
 import * as today from './routes/today.js';
 import { migrate as runMigration, pendingMigrations } from './lib/migrate.js';
@@ -29,12 +31,14 @@ const ROUTES = new Map([
   ['/api/avatar', avatar],
   ['/api/today', today],
   ['/api/guess', guess],
+  ['/api/answer', answer],
+  ['/api/reveal', reveal],
   ['/api/ranking', ranking],
   ['/api/history', history],
   ['/api/password', password],
   ['/api/profile', profile],
   ['/api/setup', setup],
-  ['/api/admin/answer', adminAnswer],
+  ['/api/admin/round', adminRound],
   ['/api/admin/setter', adminSetter],
   ['/api/bootstrap', bootstrap],
   ['/api/migrate', migrate],

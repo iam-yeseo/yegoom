@@ -76,19 +76,57 @@ export function formatShortDate(iso) {
   return `${m}월 ${d}일 (${weekday})`;
 }
 
+/* ---------------- 게임 (오전 · 오후) ---------------- */
+
+/**
+ * 하루에 두 판. 시간이 지나도 둘 다 볼 수 있게 탭바에 나란히 둔다.
+ * 서버 규칙은 src/lib/games.js 가 원본이고, 여기에는 화면에 필요한 것만 둔다.
+ */
+export const GAMES = {
+  morning: {
+    key: 'morning',
+    label: '오전 게임',
+    short: '오전',
+    icon: '🌅',
+    title: '기상시간 맞히기',
+    subject: '기상시간',
+    path: '/morning',
+  },
+  evening: {
+    key: 'evening',
+    label: '오후 게임',
+    short: '오후',
+    icon: '🌆',
+    title: '퇴근시간 맞히기',
+    subject: '퇴근시간',
+    path: '/evening',
+  },
+};
+
+/** 지금(KST) 진행 중인 게임 — 12시 전이면 오전 */
+export function currentGameKey(now = new Date()) {
+  const hour = Number(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Seoul', hour: '2-digit', hour12: false,
+    }).format(now),
+  );
+  return hour % 24 < 12 ? 'morning' : 'evening';
+}
+
 /* ---------------- 하단 탭바 ---------------- */
 
 const TABS = [
-  { href: '/', icon: '🎯', label: '오늘의 게임' },
+  { href: GAMES.morning.path, icon: GAMES.morning.icon, label: GAMES.morning.label },
+  { href: GAMES.evening.path, icon: GAMES.evening.icon, label: GAMES.evening.label },
   { href: '/ranking', icon: '🏆', label: '랭킹' },
-  { href: '/admin', icon: '🔑', label: '정답 등록', adminOnly: true },
+  { href: '/admin', icon: '🔑', label: '운영', adminOnly: true },
   { href: '/account', icon: '👤', label: '내 프로필' },
 ];
 
 export function renderTabbar(user) {
   const nav = document.querySelector('[data-tabbar]');
   if (!nav) return;
-  const here = location.pathname === '/index.html' ? '/' : location.pathname;
+  const here = location.pathname.replace(/\.html$/, '') || '/';
 
   nav.innerHTML = TABS.filter((t) => !t.adminOnly || user?.role === 'admin')
     .map(
@@ -193,8 +231,10 @@ export function roundLabel(no) {
   return `${no ?? 1}회차`;
 }
 
-/** 역할 이름 — 운영자 / 출제자 / 플레이어 */
+/** 역할 이름 — 운영자 / 오전 출제자 / 오후 출제자 / 플레이어 */
 export function roleLabel(user) {
   if (user?.role === 'admin') return '운영자';
-  return user?.isSetter ? '출제자' : '플레이어';
+  const games = user?.setterGames ?? [];
+  if (!games.length) return '플레이어';
+  return `${games.map((g) => GAMES[g]?.short ?? g).join('·')} 출제자`;
 }

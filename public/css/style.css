@@ -733,3 +733,71 @@ input[type='date'] {
   .chip { font-size: 13px; padding: 10px 4px; }
   .rank__meta { font-size: 12px; }
 }
+
+/* ---------- 게임 전환 (전체 · 오전 · 오후) ---------- */
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  margin: 0 0 14px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.segmented__item {
+  flex: 1;
+  padding: 9px 4px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segmented__item[aria-selected='true'] {
+  color: #241203;
+  background: linear-gradient(120deg, var(--accent-2), var(--accent));
+}
+
+/* ---------- 출제자의 비공개 정답 ---------- */
+
+/* 눌러 두면 그 시각이 그대로 정답이 되는 큰 버튼 (오전 게임) */
+.btn--big {
+  padding: 24px 16px;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+
+/* 기록해 둔 정답은 출제자 본인에게만 보인다 — 테두리를 점선으로 두어 구분한다 */
+.secret {
+  text-align: center;
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.secret__time {
+  font-size: 32px;
+  font-weight: 900;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+.secret__note { margin-top: 4px; font-size: 13px; color: var(--muted); }
+
+/* 탭이 다섯 개까지 늘어나므로 글자가 줄바꿈되지 않게 한다 */
+.tabbar__item { white-space: nowrap; }
+
+@media (max-width: 380px) {
+  .tabbar__item { font-size: 10px; }
+  .tabbar__icon { font-size: 17px; }
+  .segmented__item { font-size: 12px; }
+}

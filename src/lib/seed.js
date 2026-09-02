@@ -7,44 +7,44 @@ export const SEED_USERS = [
     "displayName": "yeseo",
     "avatar": "🐣",
     "role": "player",
-    "setter": false,
-    "hash": "f4dba3e33046ea4db478e8060746f34b024bb0f4ba69a73dcc5b940c723d53a8",
-    "salt": "b80ddc37d252e0ed57f508a3d4e1ebeb"
+    "setter": null,
+    "hash": "9302e6c7451e95f4c2438c04e51dcd8ff277b9b7e643ce2f5422a6baebddc4b8",
+    "salt": "7cfdef7a32891565dbf74939ee961a2e"
   },
   {
     "username": "min",
     "displayName": "min",
     "avatar": "🐤",
     "role": "player",
-    "setter": false,
-    "hash": "a9f90b33f8caf8429017afa7fc9c29065a322eba25545d63239532c7d64cab3d",
-    "salt": "beab27bafa64b5c71e671532fef99536"
+    "setter": "morning",
+    "hash": "9312ae638d8c705d2f37e56bb2f47c0e6ddec7af1f05e2f09fab4f166734594e",
+    "salt": "d16d604eb7d9779208be3d3afc8e068e"
   },
   {
     "username": "bin",
     "displayName": "bin",
     "avatar": "🐥",
     "role": "player",
-    "setter": false,
-    "hash": "69f925d386b4de93c188ac7d34effb83debc51dfacc84e343a68d1370621655b",
-    "salt": "adb623b19430177edd1c588fda01c8e7"
+    "setter": null,
+    "hash": "ef5ec378f981f709e3c6e8916cd96d08bc81361cc7b67cc8557e622865f14646",
+    "salt": "49baf642414cba8ed43a7316992e3c0d"
   },
   {
     "username": "siwon",
     "displayName": "siwon",
     "avatar": "🚪",
     "role": "player",
-    "setter": true,
-    "hash": "a76f452b25048db11c9380c90ec9205b62809078498bbd2a96090ae2cc658edc",
-    "salt": "bd873b8058b1e26e76c4701d3186e196"
+    "setter": "evening",
+    "hash": "f8463e44cdf6db7e59c810143a3eb9aecfa14d97b044239cf70af0a5a64ef801",
+    "salt": "0e233c1920964fa95f1912724090232d"
   },
   {
     "username": "admin",
     "displayName": "운영자",
     "avatar": "🔑",
     "role": "admin",
-    "setter": false,
-    "hash": "e48ec4c65c5cb45fce22fdfe842d3a9bb555ace29d745c660dd237b36cedd19f",
-    "salt": "3bc70448693dcec8c3b36d194d9ba732"
+    "setter": null,
+    "hash": "c1733f94db0225cf37b921abafc8fe815c797dcd52cc30498fef47ac2c065dfa",
+    "salt": "1dea4d1e0b64614a6e01e435884ee398"
   }
 ];

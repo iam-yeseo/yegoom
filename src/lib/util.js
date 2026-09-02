@@ -232,7 +232,7 @@ export async function getUser(context) {
     .bind(token)
     .first();
   if (!row) return null;
-  return personOf(row, { role: row.role, isSetter: row.is_setter === 1 });
+  return personOf(row, { role: row.role });
 }
 
 /** 로그인 필수 라우트용. 미로그인이면 401 Response 를 반환 */
