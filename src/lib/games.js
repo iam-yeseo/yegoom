@@ -6,7 +6,13 @@
 //   오전  기상시간 맞히기 — 출제자가 '기상했어요' 버튼을 누른 시각이 정답
 //         정답 기록 00:00 ~ 11:59 · 예측 마감 12:00
 //   오후  퇴근시간 맞히기 — 출제자가 시간을 직접 적어 둔다
-//         정답 기록 12:00 ~ 17:59 · 예측 마감 18:00
+//         정답 기록 09:00 ~ 17:59 · 예측 마감 18:00 · '기회' 를 쓴다
+//
+// 기회 — 오후 게임에만 있다. 한 번에 못 맞히면 그날 기회가 영영 사라지는 게임이라,
+// 출제자가 정답을 공개하기 전에 '기회 소진하기' 를 눌러 힌트를 줄 수 있다. 누르면
+// 그때까지 예측한 사람 중 정답에 가장 가까운 한 명에게 하이라이트가 들어가고
+// (5분 이상 벌어져 있으면 아무도 안 나온다), 남은 기회 수가 참가자에게 알려진다.
+// 기회를 다 쓰면 그때부터 정답을 공개할 수 있다. 횟수는 운영자가 /setup 에서 정한다.
 //
 // 두 게임 모두, 출제자가 정답을 넣었는지 여부는 출제자 본인 말고는 아무도 알 수
 // 없다 (DB 에만 남고 status 는 공개 전까지 계속 'open' 이다).
@@ -33,6 +39,9 @@ export const GAMES = {
     // 정답을 넣는 방식: 'button' 은 버튼을 누른 시각이 그대로 정답이 된다
     answerMode: 'button',
     answerButton: '기상했어요',
+    // 기회는 오후 게임에만 쓴다
+    useChances: false,
+    defaultChances: 0,
     // 초기 출제자 (계정을 처음 만들 때만 쓴다)
     defaultSetter: 'min',
   },
@@ -44,22 +53,42 @@ export const GAMES = {
     title: '퇴근시간 맞히기',
     subject: '퇴근시간',
     path: '/evening',
-    answerFrom: 12 * 3600,
+    // 퇴근 시간은 아침에 이미 정해지는 날이 많아, 정답 기록은 오전 9시부터 연다
+    answerFrom: 9 * 3600,
     answerTo: 18 * 3600,
-    answerFromLabel: '12:00',
+    answerFromLabel: '09:00',
     answerToLabel: '18:00',
     closeSeconds: 18 * 3600,
     closeLabel: '18:00',
     // 'time' 은 출제자가 시간을 직접 적어 둔다
     answerMode: 'time',
     answerButton: '정답 기록하기',
+    // 기회 — 운영자가 /setup 에서 바꾸기 전까지의 기본값
+    useChances: true,
+    defaultChances: 2,
     // 오후 게임의 출제자는 기존 출제자를 그대로 유지한다
     defaultSetter: null,
   },
 };
 
-/** 예측을 두 명 이상 받아야 출제자가 정답을 공개할 수 있다. */
+/** 예측을 두 명 이상 받아야 출제자가 기회를 쓰거나 정답을 공개할 수 있다. */
 export const MIN_PLAYERS_TO_REVEAL = 2;
+
+/**
+ * 기회를 쓸 때 하이라이트가 들어가는 한계.
+ * 정답과 5분 이상 벌어져 있으면 가장 가까운 사람이라도 아무 표시가 없다.
+ */
+export const CLOSE_ENOUGH_SECONDS = 5 * 60;
+
+/** 운영자가 정할 수 있는 기회 횟수의 범위 */
+export const MAX_CHANCES = 10;
+
+/** 기회 횟수로 쓸 수 있는 값인지 확인. 아니면 null */
+export function normalizeChances(value) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 0 || n > MAX_CHANCES) return null;
+  return n;
+}
 
 /** 넘어온 값이 게임 키가 맞는지 확인. 아니면 null */
 export function gameKeyOf(value) {
@@ -90,9 +119,11 @@ export function gameInfo(game) {
     path: g.path,
     answerMode: g.answerMode,
     answerButton: g.answerButton,
+    useChances: g.useChances,
     answerFromLabel: g.answerFromLabel,
     answerToLabel: g.answerToLabel,
     closeLabel: g.closeLabel,
     minPlayersToReveal: MIN_PLAYERS_TO_REVEAL,
+    closeEnoughSeconds: CLOSE_ENOUGH_SECONDS,
   };
 }

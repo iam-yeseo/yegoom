@@ -16,6 +16,12 @@ CREATE TABLE IF NOT EXISTS users (
      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
    );
 
+CREATE TABLE IF NOT EXISTS game_config (
+     game       TEXT    PRIMARY KEY CHECK (game IN ('morning', 'evening')),
+     chances    INTEGER NOT NULL DEFAULT 0,
+     updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+   );
+
 CREATE TABLE IF NOT EXISTS game_setters (
      game       TEXT    PRIMARY KEY CHECK (game IN ('morning', 'evening')),
      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -48,6 +54,8 @@ CREATE TABLE IF NOT EXISTS rounds (
      setter_user_id INTEGER REFERENCES users(id),
      answer_seconds INTEGER,
      answered_at    TEXT,
+     chances_total  INTEGER,
+     chances_used   INTEGER NOT NULL DEFAULT 0,
      status         TEXT    NOT NULL DEFAULT 'open'
                             CHECK (status IN ('open', 'settled', 'void')),
      revealed_at    TEXT,
@@ -55,6 +63,17 @@ CREATE TABLE IF NOT EXISTS rounds (
      created_by     INTEGER REFERENCES users(id),
      created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (game, game_date)
+   );
+
+CREATE TABLE IF NOT EXISTS round_chances (
+     game         TEXT    NOT NULL CHECK (game IN ('morning', 'evening')),
+     game_date    TEXT    NOT NULL,
+     seq          INTEGER NOT NULL,
+     user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+     diff_seconds INTEGER,
+     guesses      INTEGER NOT NULL DEFAULT 0,
+     created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+     PRIMARY KEY (game, game_date, seq)
    );
 
 CREATE TABLE IF NOT EXISTS guesses (

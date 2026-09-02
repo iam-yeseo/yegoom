@@ -1,9 +1,10 @@
 import { json, personOf, requireUser, secondsToHHMMSS, todayKST } from '../lib/util.js';
 import {
-  canRecordAnswer, canReveal, closeExpiredRounds, formatDiff, formatScore, isClosed,
-  roundNumberFor,
+  canBurnChance, canRecordAnswer, canReveal, chanceLog, chanceStateOf, closeExpiredRounds,
+  formatDiff, formatScore, isClosed, roundNumberFor,
 } from '../lib/game.js';
 import { MIN_PLAYERS_TO_REVEAL, gameInfo, gameOf } from '../lib/games.js';
+import { chancesFor } from '../lib/config.js';
 import { getSetter } from '../lib/setter.js';
 
 /**
@@ -11,6 +12,9 @@ import { getSetter } from '../lib/setter.js';
  *
  * 출제자가 정답을 기록해 두었는지는 출제자 본인에게만(mine) 내려간다.
  * 다른 사람에게는 status 가 계속 'open' 이라 기록 여부를 알 수 없다.
+ *
+ * '기회' 는 반대로 모두에게 보인다. 기회를 쓰면 가장 가까운 사람에게 하이라이트가
+ * 들어가는 게 곧 그 기능이기 때문이다. 다만 오차 값은 누구에게도 내려가지 않는다.
  */
 export async function onRequestGet(context) {
   const db = context.env.DB;
@@ -24,9 +28,12 @@ export async function onRequestGet(context) {
   // 정답 없이 끝난 날들을 먼저 '게임 없음' 으로 정리한다
   await closeExpiredRounds(db);
 
-  const [round, playersRes, guessesRes, resultsRes, totalsRes, currentSetter] = await Promise.all([
+  const [
+    round, playersRes, guessesRes, resultsRes, totalsRes, currentSetter, chanceRows, configured,
+  ] = await Promise.all([
     db.prepare(
-      `SELECT round_no, setter_user_id, answer_seconds, answered_at, status, revealed_at
+      `SELECT round_no, setter_user_id, answer_seconds, answered_at, status, revealed_at,
+              chances_total, chances_used
          FROM rounds WHERE game = ? AND game_date = ?`,
     ).bind(game.key, gameDate).first(),
     db.prepare(
@@ -44,6 +51,8 @@ export async function onRequestGet(context) {
          FROM results WHERE game = ? GROUP BY user_id`,
     ).bind(game.key).all(),
     getSetter(db, game.key),
+    chanceLog(db, game.key, gameDate),
+    chancesFor(db, game.key),
   ]);
 
   const status = round?.status ?? (isClosed(game.key, gameDate) ? 'void' : 'open');
@@ -61,6 +70,7 @@ export async function onRequestGet(context) {
     : null;
   const setter = personOf(recordedSetter) ?? currentSetter;
 
+  const playerById = new Map((playersRes.results ?? []).map((p) => [p.id, p]));
   const guessByUser = new Map((guessesRes.results ?? []).map((g) => [g.user_id, g]));
   const resultByUser = new Map((resultsRes.results ?? []).map((r) => [r.user_id, r]));
   const totalByUser = new Map((totalsRes.results ?? []).map((t) => [t.user_id, t]));
@@ -92,6 +102,12 @@ export async function onRequestGet(context) {
   const isSetter = !!setter && setter.id === user.id;
   const answerRecorded = round?.answer_seconds !== null && round?.answer_seconds !== undefined;
 
+  // 기회 — 마지막으로 쓴 기회에서 뽑힌 사람이 지금의 하이라이트다
+  const chances = chanceStateOf(round, configured);
+  const lastChance = chanceRows.at(-1) ?? null;
+  const highlightId = revealed ? null : lastChance?.user_id ?? null;
+  for (const p of players) p.isClosest = p.id === highlightId;
+
   return json({
     ok: true,
     game: gameInfo(game),
@@ -110,14 +126,30 @@ export async function onRequestGet(context) {
     myGuess: secondsToHHMMSS(guessByUser.get(user.id)?.guess_seconds ?? null),
     players,
     user,
+    // 기회 — 오차는 담지 않는다 (자기 예측을 아는 사람에게 정답이 드러난다)
+    chances: {
+      ...chances,
+      log: chanceRows.map((c) => ({
+        seq: c.seq,
+        closest: personOf(playerById.get(c.user_id)),
+        guesses: c.guesses,
+      })),
+    },
     // 출제자 본인에게만 내려가는 비공개 상태
     mine: isSetter
       ? {
           answerRecorded,
           answer: secondsToHHMMSS(round?.answer_seconds ?? null),
           answeredAt: round?.answered_at ?? null,
-          canRecord: status === 'open' && canRecordAnswer(game.key, gameDate),
-          canReveal: canReveal({ answerRecorded, guesses: submitted, status }),
+          // 기회를 이미 썼다면 그 힌트가 이 정답을 기준으로 나갔으므로 더는 못 바꾼다
+          canRecord:
+            status === 'open' && !chances.used && canRecordAnswer(game.key, gameDate),
+          canBurnChance: canBurnChance({
+            answerRecorded, guesses: submitted, status, remaining: chances.remaining,
+          }),
+          canReveal: canReveal({
+            answerRecorded, guesses: submitted, status, remaining: chances.remaining, closed,
+          }),
           needMore: Math.max(0, MIN_PLAYERS_TO_REVEAL - submitted),
         }
       : null,

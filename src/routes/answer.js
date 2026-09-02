@@ -11,6 +11,7 @@ import {
 } from '../lib/util.js';
 import { canRecordAnswer } from '../lib/game.js';
 import { gameOf } from '../lib/games.js';
+import { chancesFor } from '../lib/config.js';
 import { getSetter } from '../lib/setter.js';
 
 /** 이 게임의 출제자인지 확인하고, 오늘 라운드를 함께 돌려준다. */
@@ -26,7 +27,10 @@ async function requireSetter(context, game) {
 
   const gameDate = todayKST();
   const round = await db
-    .prepare(`SELECT status, answer_seconds FROM rounds WHERE game = ? AND game_date = ?`)
+    .prepare(
+      `SELECT status, answer_seconds, chances_total, chances_used FROM rounds
+        WHERE game = ? AND game_date = ?`,
+    )
     .bind(game.key, gameDate)
     .first();
 
@@ -35,6 +39,11 @@ async function requireSetter(context, game) {
   }
   if (round?.status === 'void') {
     return { response: fail(409, `오늘 ${game.label}은 이미 끝났어요.`) };
+  }
+  // 기회를 한 번이라도 썼다면 그 힌트가 이 정답을 기준으로 나간 뒤다.
+  // 이제 와서 정답을 바꾸면 앞의 힌트가 거짓말이 되므로 잠근다.
+  if (round?.chances_used) {
+    return { response: fail(409, '이미 기회를 써서 정답을 바꿀 수 없어요.') };
   }
 
   return { user, db, gameDate, round };
@@ -45,7 +54,7 @@ export async function onRequestPost(context) {
   const body = await readJson(context.request);
   const game = gameOf(body.game);
 
-  const { user, db, gameDate, response } = await requireSetter(context, game);
+  const { user, db, gameDate, round, response } = await requireSetter(context, game);
   if (response) return response;
 
   if (!canRecordAnswer(game.key, gameDate)) {
@@ -60,18 +69,24 @@ export async function onRequestPost(context) {
     : normalizeSeconds(body.time ?? body.seconds);
   if (seconds === null) return fail(400, '정답 시간을 HH:MM:SS 형식으로 입력해 주세요.');
 
+  // 그날의 기회 수는 정답을 기록하는 순간 라운드에 박아 둔다. 그래야 운영자가
+  // 도중에 설정을 바꿔도 이미 시작된 게임이 흔들리지 않는다.
+  const chances = round?.chances_total ?? (await chancesFor(db, game.key));
+
   await db
     .prepare(
       `INSERT INTO rounds
-         (game, game_date, setter_user_id, answer_seconds, answered_at, status, created_by)
-       VALUES (?, ?, ?, ?, datetime('now'), 'open', ?)
+         (game, game_date, setter_user_id, answer_seconds, answered_at,
+          chances_total, status, created_by)
+       VALUES (?, ?, ?, ?, datetime('now'), ?, 'open', ?)
        ON CONFLICT(game, game_date) DO UPDATE
          SET setter_user_id = excluded.setter_user_id,
              answer_seconds = excluded.answer_seconds,
              answered_at    = excluded.answered_at,
+             chances_total  = excluded.chances_total,
              created_by     = excluded.created_by`,
     )
-    .bind(game.key, gameDate, user.id, seconds, user.id)
+    .bind(game.key, gameDate, user.id, seconds, chances, user.id)
     .run();
 
   return json({
@@ -80,6 +95,7 @@ export async function onRequestPost(context) {
     date: gameDate,
     answer: secondsToHHMMSS(seconds),
     recordedAt: secondsToHHMMSS(nowSecondsKST()),
+    chances,
   });
 }
 

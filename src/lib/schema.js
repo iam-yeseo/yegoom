@@ -25,6 +25,14 @@ export const SCHEMA_STATEMENTS = [
      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
    )`,
 
+  // 게임별 설정 — 지금은 '기회' 횟수 하나뿐이다. 운영자가 /setup 에서 바꾼다.
+  // 행이 없으면 src/lib/games.js 의 defaultChances 를 쓴다.
+  `CREATE TABLE IF NOT EXISTS game_config (
+     game       TEXT    PRIMARY KEY CHECK (game IN ('morning', 'evening')),
+     chances    INTEGER NOT NULL DEFAULT 0,
+     updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+   )`,
+
   // 게임별 출제자 — 한 게임에 한 명.
   //   morning 이 사람의 기상시간을 맞힌다
   //   evening 이 사람의 퇴근시간을 맞힌다
@@ -66,6 +74,11 @@ export const SCHEMA_STATEMENTS = [
   // answer_seconds 는 출제자가 기록한 정답이고, answered_at 은 기록한 시각이다.
   // 공개 전까지 이 두 값은 출제자 본인에게만 내려간다. 정답을 넣어 두어도
   // status 는 'open' 그대로라, 남들은 정답이 기록됐는지조차 알 수 없다.
+  //
+  // chances_total 은 정답을 기록할 때 game_config 에서 떠 온 그날의 기회 수다.
+  // 한 번 시작한 라운드는 운영자가 설정을 바꿔도 그대로 간다.
+  // chances_used 는 출제자가 지금까지 쓴 기회 수 — 이건 참가자에게도 보인다
+  // (기회를 쓰면 하이라이트가 공개되므로 어차피 드러나는 값이다).
   `CREATE TABLE IF NOT EXISTS rounds (
      game           TEXT    NOT NULL CHECK (game IN ('morning', 'evening')),
      game_date      TEXT    NOT NULL,
@@ -73,6 +86,8 @@ export const SCHEMA_STATEMENTS = [
      setter_user_id INTEGER REFERENCES users(id),
      answer_seconds INTEGER,
      answered_at    TEXT,
+     chances_total  INTEGER,
+     chances_used   INTEGER NOT NULL DEFAULT 0,
      status         TEXT    NOT NULL DEFAULT 'open'
                             CHECK (status IN ('open', 'settled', 'void')),
      revealed_at    TEXT,
@@ -80,6 +95,23 @@ export const SCHEMA_STATEMENTS = [
      created_by     INTEGER REFERENCES users(id),
      created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
      PRIMARY KEY (game, game_date)
+   )`,
+
+  // 기회를 한 번 쓸 때마다 남는 기록.
+  //   user_id      그때 정답에 가장 가까웠던 사람 (5분 이상 벌어져 있으면 NULL)
+  //   diff_seconds 그 사람의 오차 (기록용)
+  //   guesses      그때까지 예측을 낸 사람 수
+  // 밖으로 나가는 건 "누가 가장 가까운가" 뿐이다. 오차 값은 공개 전까지 아무에게도
+  // 내려가지 않는다 — 자기 예측을 아는 사람이 오차를 알면 정답이 그대로 드러난다.
+  `CREATE TABLE IF NOT EXISTS round_chances (
+     game         TEXT    NOT NULL CHECK (game IN ('morning', 'evening')),
+     game_date    TEXT    NOT NULL,
+     seq          INTEGER NOT NULL,
+     user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+     diff_seconds INTEGER,
+     guesses      INTEGER NOT NULL DEFAULT 0,
+     created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+     PRIMARY KEY (game, game_date, seq)
    )`,
 
   // 플레이어의 예측 (초 단위)

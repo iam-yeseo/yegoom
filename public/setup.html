@@ -39,6 +39,21 @@
     </section>
 
     <section class="card">
+      <div class="card__label">기회 횟수</div>
+      <p class="muted" style="margin: 0 0 12px; font-size: 14px">
+        출제자가 정답을 공개하기 전에 쓸 수 있는 힌트 횟수입니다. 기회를 한 번 쓸 때마다
+        그때 정답에 가장 가까운 사람 한 명이 드러나고(5분 이상 벌어져 있으면 아무도 안 나옴),
+        참가자들은 남은 기회 안에서 예측을 다시 낼 수 있습니다. 기회를 다 써야 정답을
+        공개할 수 있습니다. 0으로 두면 기회 없이 바로 공개합니다.
+      </p>
+      <div id="chance-list"><div class="skeleton"></div></div>
+      <p class="muted" style="font-size: 13px; margin: 10px 0 0">
+        바꾼 횟수는 다음 라운드부터 적용됩니다. 이미 정답이 기록된 그날 게임은
+        기록할 때 정해진 횟수를 그대로 씁니다.
+      </p>
+    </section>
+
+    <section class="card">
       <div class="card__label">스키마 업데이트</div>
       <p class="muted" style="margin: 0 0 12px; font-size: 14px">
         예전 버전으로 만든 데이터베이스를 지금 모양으로 옮깁니다. 기록은 그대로
@@ -65,6 +80,7 @@
       migrate: document.getElementById('migrate'),
       migrateState: document.getElementById('migrate-state'),
       setterList: document.getElementById('setter-list'),
+      chanceList: document.getElementById('chance-list'),
     };
 
     // SETUP_TOKEN 을 걸어 뒀다면 /setup?token=... 으로 들어온다
@@ -166,6 +182,61 @@
       await refreshSetter().catch(() => {});
     });
 
+    /** 기회 횟수 — 운영자로 로그인했을 때만 내려온다 */
+    async function refreshChances() {
+      let data;
+      try {
+        data = await api('/api/admin/config');
+      } catch (err) {
+        el.chanceList.innerHTML = `<p class="muted center" style="margin:0">${
+          err.status === 401 || err.status === 403
+            ? '운영자로 로그인하면 여기서 기회 횟수를 정할 수 있어요.'
+            : escapeHtml(err.message)
+        }</p>`;
+        return;
+      }
+
+      el.chanceList.innerHTML = data.games
+        .map(
+          (game) => `<div class="player">
+            <div class="player__avatar" aria-hidden="true">${game.icon}</div>
+            <div class="player__body">
+              <div class="player__name">${escapeHtml(game.label)}</div>
+              <div class="player__meta">${escapeHtml(game.title)}</div>
+            </div>
+            <div class="stepper">
+              <button class="chip" type="button" data-chance="${game.key}" data-step="-1"
+                      aria-label="기회 줄이기"${game.chances <= 0 ? ' disabled' : ''}>−</button>
+              <b class="stepper__value">${game.chances}</b>
+              <button class="chip" type="button" data-chance="${game.key}" data-step="1"
+                      aria-label="기회 늘리기"${
+                        game.chances >= data.maxChances ? ' disabled' : ''
+                      }>+</button>
+            </div>
+          </div>`,
+        )
+        .join('');
+    }
+
+    el.chanceList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-chance]');
+      if (!btn || btn.disabled) return;
+
+      const now = Number(btn.parentElement.querySelector('.stepper__value').textContent);
+      btn.disabled = true;
+      showMessage(el.msg, '');
+      try {
+        const res = await api('/api/admin/config', {
+          method: 'POST',
+          body: { game: btn.dataset.chance, chances: now + Number(btn.dataset.step) },
+        });
+        showMessage(el.msg, `${res.game.label} 기회를 ${res.chances}번으로 정했어요.`, 'ok');
+      } catch (err) {
+        showMessage(el.msg, err.message);
+      }
+      await refreshChances().catch(() => {});
+    });
+
     async function refresh() {
       const s = await api('/api/bootstrap');
 
@@ -213,6 +284,7 @@
         showMessage(el.msg, `계정 ${res.userCount}개를 만들었습니다.`, 'ok');
         await refresh();
         await refreshSetter().catch(() => {});
+        await refreshChances().catch(() => {});
       } catch (err) {
         showMessage(el.msg, err.message);
         el.run.disabled = false;
@@ -240,6 +312,7 @@
         );
         await refresh().catch(() => {});
         await refreshSetter().catch(() => {});
+        await refreshChances().catch(() => {});
       } catch (err) {
         showMessage(el.msg, err.message);
       } finally {
@@ -256,6 +329,7 @@
     }
 
     await refreshSetter().catch(() => {});
+    await refreshChances().catch(() => {});
   </script>
 </body>
 </html>

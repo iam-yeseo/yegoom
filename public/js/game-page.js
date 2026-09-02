@@ -49,6 +49,13 @@ document.querySelector('[data-app]').innerHTML = `
     <p id="closed-text" style="margin: 0"></p>
   </section>
 
+  <section id="chance-box" class="card hidden">
+    <div class="card__label">기회</div>
+    <p class="chance__headline" id="chance-headline">&nbsp;</p>
+    <div id="chance-log"></div>
+    <p class="muted" id="chance-note" style="font-size: 13px; margin: 10px 0 0"></p>
+  </section>
+
   <section id="guess-box" class="card hidden">
     <div class="card__label">내 예측 · 초까지</div>
     <div id="guess-input"></div>
@@ -82,6 +89,10 @@ document.querySelector('[data-app]').innerHTML = `
       <button id="record" class="btn hidden" type="button">기록하기</button>
       <button id="record-clear" class="btn btn--ghost hidden" type="button">기록 지우기</button>
     </div>
+
+    <button id="burn" class="btn hidden" type="button" style="margin-top: 10px">
+      기회 소진하기
+    </button>
 
     <button id="reveal" class="btn hidden" type="button" style="margin-top: 10px">
       정답 공개하기
@@ -126,7 +137,8 @@ const el = Object.fromEntries(
     'guess-box', 'guess-submit', 'guess-hint', 'chips',
     'setter-box', 'setter-label', 'setter-avatar', 'setter-name', 'setter-hint',
     'answer-input-wrap', 'secret', 'secret-time', 'secret-note',
-    'record', 'record-clear', 'reveal',
+    'record', 'record-clear', 'burn', 'reveal',
+    'chance-box', 'chance-headline', 'chance-log', 'chance-note',
     'admin-box', 'players', 'players-label', 'rules-note',
   ].map((id) => [id.replace(/-(.)/g, (_, c) => c.toUpperCase()), document.getElementById(id)]),
 );
@@ -162,6 +174,9 @@ function syncChips() {
     chip.setAttribute('aria-pressed', String(chip.dataset.time === guessInput.value));
   }
 }
+
+/** 마지막으로 받아 온 상태 — 버튼 핸들러가 남은 기회 같은 걸 참고한다. */
+let current = null;
 
 /** 버튼을 잠그고 일을 시킨 뒤, 끝나면 화면을 새로 그린다. */
 async function run(button, busyText, work) {
@@ -216,6 +231,27 @@ el.recordClear.addEventListener('click', () => {
   });
 });
 
+el.burn.addEventListener('click', () => {
+  const left = current?.chances?.remaining ?? 0;
+  const ask = left > 1
+    ? `기회를 한 번 쓸까요? 쓰고 나면 ${left - 1}번 남아요.`
+    : '마지막 기회를 쓸까요? 쓰고 나면 정답을 공개할 수 있어요.';
+  if (!confirm(`${ask}\n\n지금 예측 중 정답에 가장 가까운 사람에게 하이라이트가 들어갑니다.`)) {
+    return;
+  }
+
+  return run(el.burn, '쓰는 중…', async () => {
+    const res = await api('/api/chance', { method: 'POST', body: { game: gameKey } });
+    showMessage(
+      el.msg,
+      res.closest
+        ? `${res.seq}번째 기회 · ${res.closest.displayName} 님이 가장 가까워요. (남은 기회 ${res.remaining}번)`
+        : `${res.seq}번째 기회 · 5분 안에 든 사람이 없어요. (남은 기회 ${res.remaining}번)`,
+      'ok',
+    );
+  });
+});
+
 el.reveal.addEventListener('click', () => {
   if (!confirm('정답을 공개할까요? 공개하면 오차와 점수가 바로 확정됩니다.')) return;
   return run(el.reveal, '공개 중…', async () => {
@@ -227,6 +263,50 @@ el.reveal.addEventListener('click', () => {
     );
   });
 });
+
+/**
+ * 기회 카드 — 참가자와 출제자 모두에게 같은 내용이 보인다.
+ * 기회를 쓰면 하이라이트가 공개되므로 어차피 드러나는 정보다.
+ * 다만 '누가 가장 가까운가' 만 나오고, 오차 값은 어디에도 내려오지 않는다.
+ */
+function renderChances(state) {
+  const { game, chances } = state;
+  const on = game.useChances && (chances.total > 0 || chances.used > 0);
+  el.chanceBox.classList.toggle('hidden', !on);
+  if (!on) return;
+
+  if (state.revealed) {
+    el.chanceHeadline.textContent = `기회 ${chances.used}번을 쓰고 정답이 공개됐어요.`;
+  } else if (state.status === 'void') {
+    el.chanceHeadline.textContent = '정답 없이 끝나 기회도 사라졌어요.';
+  } else if (!chances.used) {
+    el.chanceHeadline.textContent = `오늘 걸린 기회는 ${chances.total}번이에요.`;
+  } else if (chances.remaining === 1) {
+    el.chanceHeadline.textContent = '이제 기회는 단 한 번!';
+  } else if (chances.remaining > 1) {
+    el.chanceHeadline.textContent = `이제 기회는 ${chances.remaining}번 남았어요!`;
+  } else {
+    el.chanceHeadline.textContent = '기회를 모두 썼어요. 곧 정답이 공개됩니다.';
+  }
+
+  el.chanceLog.innerHTML = chances.log.length
+    ? chances.log
+        .map(
+          (c) => `<div class="chance-row${
+            c.closest ? ' chance-row--hit' : ''
+          }"><span class="chance-row__seq">${c.seq}번째 기회</span>${
+            c.closest
+              ? `${personChip(c.closest)} 님이 가장 가까워요 🔥`
+              : '<span class="muted">5분 안에 든 사람이 없었어요</span>'
+          }</div>`,
+        )
+        .join('')
+    : '';
+
+  el.chanceNote.textContent = state.revealed
+    ? ''
+    : `출제자가 기회를 쓰면 그때 정답에 가장 가까운 사람 한 명이 드러나요. 5분 이상 벌어져 있으면 아무도 뽑히지 않아요.`;
+}
 
 /** 출제자 전용 카드 — 기록 상태와 공개 버튼 */
 function renderSetter(state) {
@@ -248,9 +328,11 @@ function renderSetter(state) {
   el.secret.classList.toggle('hidden', !recorded || state.revealed);
   if (recorded) {
     el.secretTime.textContent = mine.answer;
-    el.secretNote.textContent = byButton
-      ? '기상 시각으로 기록해 뒀어요 · 나만 볼 수 있어요'
-      : '정답으로 기록해 뒀어요 · 나만 볼 수 있어요';
+    el.secretNote.textContent = state.chances.used
+      ? '이미 기회를 써서 이 정답은 더 바꿀 수 없어요 · 나만 볼 수 있어요'
+      : byButton
+        ? '기상 시각으로 기록해 뒀어요 · 나만 볼 수 있어요'
+        : '정답으로 기록해 뒀어요 · 나만 볼 수 있어요';
   }
 
   el.record.classList.toggle('hidden', !mine.canRecord);
@@ -261,7 +343,19 @@ function renderSetter(state) {
     : (recorded ? '정답 다시 기록하기' : game.answerButton);
 
   el.recordClear.classList.toggle('hidden', !(mine.canRecord && recorded));
-  el.reveal.classList.toggle('hidden', state.revealed || !recorded);
+
+  // 기회가 걸린 게임은 기회를 다 써야 공개 버튼이 나온다.
+  // (예측이 마감된 뒤에는 더 받을 답이 없으므로 남은 기회와 상관없이 공개할 수 있다)
+  const chances = state.chances;
+  const chancesLeft = game.useChances && chances.remaining > 0 && !state.closed;
+
+  el.burn.classList.toggle('hidden', state.revealed || !recorded || !chancesLeft);
+  el.burn.disabled = !mine.canBurnChance;
+  el.burn.textContent = chances.remaining === 1
+    ? '마지막 기회 소진하기'
+    : `기회 소진하기 (${chances.remaining}번 남음)`;
+
+  el.reveal.classList.toggle('hidden', state.revealed || !recorded || chancesLeft);
   el.reveal.disabled = !mine.canReveal;
 
   if (state.revealed) {
@@ -273,7 +367,13 @@ function renderSetter(state) {
   } else if (!recorded) {
     el.setterHint.textContent = `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록해 두면 돼요. 기록했는지는 아무에게도 보이지 않아요.`;
   } else if (mine.needMore > 0) {
-    el.setterHint.textContent = `예측이 ${game.minPlayersToReveal}명 이상 모이면 공개할 수 있어요. (지금 ${state.submitted}명)`;
+    el.setterHint.textContent = `예측이 ${game.minPlayersToReveal}명 이상 모여야 기회를 쓰거나 공개할 수 있어요. (지금 ${state.submitted}명)`;
+  } else if (chancesLeft) {
+    el.setterHint.textContent = `기회를 쓰면 지금 정답에 가장 가까운 사람이 드러나요. 남은 기회 ${chances.remaining}번을 다 써야 정답을 공개할 수 있어요.`;
+  } else if (game.useChances && chances.total > 0) {
+    el.setterHint.textContent = state.closed && chances.remaining > 0
+      ? '예측이 마감돼서 남은 기회 없이도 공개할 수 있어요.'
+      : '기회를 모두 썼어요. 이제 정답을 공개할 수 있어요.';
   } else {
     el.setterHint.textContent = '이제 언제든 정답을 공개할 수 있어요.';
   }
@@ -281,6 +381,7 @@ function renderSetter(state) {
 
 async function load() {
   const state = await api(`/api/today?game=${gameKey}`);
+  current = state;
   const game = state.game;
   const isPlayer = user.role === 'player';
 
@@ -331,6 +432,7 @@ async function load() {
   el.setterBox.classList.toggle('hidden', !state.isSetter);
   el.adminBox.classList.toggle('hidden', user.role !== 'admin');
 
+  renderChances(state);
   if (state.isSetter) renderSetter(state);
 
   if (canGuess) {
@@ -339,7 +441,15 @@ async function load() {
       guessInput.value = state.myGuess ?? DEFAULT_GUESS;
     }
     el.guessSubmit.textContent = state.myGuess ? '다시 확정하기' : '확정하기';
-    el.guessHint.textContent = `${state.closesAt} 마감 전까지 몇 번이든 바꿀 수 있어요.`;
+    // 기회가 걸린 게임에서는 남은 기회를 예측칸 바로 아래에도 적어 준다
+    const left = game.useChances ? state.chances.remaining : 0;
+    el.guessHint.textContent = game.useChances && state.chances.used
+      ? (left === 1
+          ? '이제 기회는 단 한 번! 예측을 다시 확정해 보세요.'
+          : left > 1
+            ? `기회가 ${left}번 남았어요. 예측을 다시 확정해 보세요.`
+            : '기회를 모두 썼어요. 곧 정답이 공개됩니다.')
+      : `${state.closesAt} 마감 전까지 몇 번이든 바꿀 수 있어요.`;
   }
 
   el.rulesNote.textContent =
@@ -350,10 +460,11 @@ async function load() {
   el.playersLabel.textContent = state.revealed ? '결과' : '참가자';
   el.players.innerHTML = state.players
     .map((p) => {
-      const winner = p.isWinner ? ' player--winner' : '';
+      const winner = p.isWinner ? ' player--winner' : p.isClosest ? ' player--closest' : '';
       const tags =
         (p.isMe ? '<span class="tag tag--me">나</span>' : '') +
-        (p.isWinner ? '<span class="tag tag--win">1등 🏆</span>' : '');
+        (p.isWinner ? '<span class="tag tag--win">1등 🏆</span>' : '') +
+        (p.isClosest ? '<span class="tag tag--close">가장 가까워요 🔥</span>' : '');
 
       let meta;
       if (state.revealed) meta = p.submitted ? `${p.diffText} · ${p.scoreText}` : '예측 없음';
