@@ -11,6 +11,7 @@
 //   results      : diff(분)       -> diff_seconds, score 추가
 //   게임 분리     : rounds/guesses/results 에 game 컬럼 추가 (기존 기록은 오후 게임으로)
 //   game_setters : 게임별 출제자 표 추가 (기존 출제자는 오후, 오전은 min)
+//   기회          : rounds 에 chances_total/chances_used 추가 + round_chances / game_config 표
 //   계정          : 운영자 전용 admin 계정을 만들고, 기존 운영자는 출제자/플레이어로 옮긴다
 
 import { GAMES } from './games.js';
@@ -72,6 +73,11 @@ export async function pendingMigrations(db) {
   if (guesses.length && !guesses.includes('game')) pending.push('guesses.game');
   if (results.length && !results.includes('game')) pending.push('results.game');
   if (!(await columnsOf(db, 'game_setters')).length) pending.push('game_setters');
+
+  // 오후 게임의 '기회'
+  if (rounds.length && !rounds.includes('chances_used')) pending.push('rounds.chances');
+  if (!(await columnsOf(db, 'round_chances')).length) pending.push('round_chances');
+  if (!(await columnsOf(db, 'game_config')).length) pending.push('game_config');
 
   // 운영자 전용 계정이 아직 없으면 계정 정리도 남아 있는 것이다
   const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
@@ -212,6 +218,20 @@ export async function migrate(db) {
 
   // 6. 게임별 출제자 — 기존 출제자(users.is_setter)를 오후 게임으로 옮긴다
   applied.push(...(await migrateSetters(db)));
+
+  // 6-1. 기회 — rounds 에 컬럼만 더 붙이면 된다
+  //      (round_chances / game_config 표는 0단계에서 이미 만들어졌다)
+  const chanceCols = await columnsOf(db, 'rounds');
+  if (chanceCols.length && !chanceCols.includes('chances_total')) {
+    await db.prepare(`ALTER TABLE rounds ADD COLUMN chances_total INTEGER`).run();
+    applied.push('rounds.chances_total');
+  }
+  if (chanceCols.length && !chanceCols.includes('chances_used')) {
+    await db.prepare(
+      `ALTER TABLE rounds ADD COLUMN chances_used INTEGER NOT NULL DEFAULT 0`,
+    ).run();
+    applied.push('rounds.chances_used');
+  }
 
   // 7. 계정 — 운영자를 admin 계정 하나로 분리한다
   applied.push(...(await migrateAccounts(db)));

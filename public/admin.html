@@ -27,7 +27,8 @@
       <p class="muted" style="margin: 0; font-size: 14px">
         오전 게임은 출제자가 <b>기상했어요</b> 버튼을 누른 시각이, 오후 게임은 출제자가 적어 둔
         시각이 정답이 됩니다. 정답을 기록했는지 여부는 <b>운영자에게도 보이지 않습니다.</b>
-        여기서는 잘못 공개된 회차를 되돌리고, 출제자를 바꿀 수 있습니다.
+        여기서는 잘못 공개된 회차를 되돌릴 수 있고, <a href="/setup">설정</a> 에서 출제자와
+        오후 게임의 <b>기회 횟수</b>를 바꿀 수 있습니다.
       </p>
     </section>
 
@@ -41,7 +42,7 @@
         게임마다 한 명씩 지정합니다. 출제자는 자기 게임에만 빠지고, 다른 게임에는 평범한
         플레이어로 참가합니다.
       </p>
-      <a class="btn btn--ghost" href="/setup">출제자 바꾸기</a>
+      <a class="btn btn--ghost" href="/setup">출제자 · 기회 횟수 바꾸기</a>
     </section>
   </div>
 
@@ -93,6 +94,19 @@
         summary = `${state.submitted}/${state.players.length}명 확정 · 출제자가 공개하기를 기다리는 중`;
       }
 
+      // 기회는 쓰는 순간 모두에게 공개되므로 운영자 화면에도 그대로 보여 준다
+      const chances = game.useChances
+        ? `<p class="muted" style="margin: 0 0 12px; font-size: 14px">기회 ${
+            state.chances.used
+          }/${state.chances.total}번 사용${
+            state.chances.log.filter((c) => c.closest).length
+              ? ` · 마지막 하이라이트 ${escapeHtml(
+                  state.chances.log.filter((c) => c.closest).at(-1).closest.displayName,
+                )} 님`
+              : ''
+          }</p>`
+        : '';
+
       return `<section class="card">
         <div class="card__label">${game.icon} ${escapeHtml(game.label)} · ${escapeHtml(game.title)}</div>
 
@@ -102,6 +116,7 @@
         </div>
 
         <p style="margin: 0 0 12px">${summary}</p>
+        ${chances}
 
         <div class="profile-preview" style="margin-bottom: 14px; padding-bottom: 14px">
           <div class="profile-preview__avatar" aria-hidden="true">${

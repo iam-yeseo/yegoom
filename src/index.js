@@ -4,11 +4,13 @@
 // 거기서 매칭되지 않은 요청만 이 Worker 로 넘어온다. 즉 여기서는 사실상
 // /api/* 만 다루면 된다.
 
+import * as adminConfig from './routes/admin-config.js';
 import * as adminRound from './routes/admin-round.js';
 import * as adminSetter from './routes/admin-setter.js';
 import * as answer from './routes/answer.js';
 import * as avatar from './routes/avatar.js';
 import * as bootstrap from './routes/bootstrap.js';
+import * as chance from './routes/chance.js';
 import * as guess from './routes/guess.js';
 import * as history from './routes/history.js';
 import * as login from './routes/login.js';
@@ -32,12 +34,14 @@ const ROUTES = new Map([
   ['/api/today', today],
   ['/api/guess', guess],
   ['/api/answer', answer],
+  ['/api/chance', chance],
   ['/api/reveal', reveal],
   ['/api/ranking', ranking],
   ['/api/history', history],
   ['/api/password', password],
   ['/api/profile', profile],
   ['/api/setup', setup],
+  ['/api/admin/config', adminConfig],
   ['/api/admin/round', adminRound],
   ['/api/admin/setter', adminSetter],
   ['/api/bootstrap', bootstrap],

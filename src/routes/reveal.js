@@ -4,8 +4,9 @@
 // 확정되고 회차가 하나 올라간다.
 
 import { fail, json, readJson, requireUser, todayKST } from '../lib/util.js';
-import { canReveal, guessCount, revealRound } from '../lib/game.js';
+import { canReveal, chanceStateOf, guessCount, isClosed, revealRound } from '../lib/game.js';
 import { MIN_PLAYERS_TO_REVEAL, gameOf } from '../lib/games.js';
+import { chancesFor } from '../lib/config.js';
 
 export async function onRequestPost(context) {
   const { user, response } = await requireUser(context);
@@ -18,7 +19,7 @@ export async function onRequestPost(context) {
 
   const round = await db
     .prepare(
-      `SELECT setter_user_id, answer_seconds, status FROM rounds
+      `SELECT setter_user_id, answer_seconds, status, chances_total, chances_used FROM rounds
         WHERE game = ? AND game_date = ?`,
     )
     .bind(game.key, gameDate)
@@ -35,11 +36,23 @@ export async function onRequestPost(context) {
     return fail(409, '아직 정답을 기록하지 않았어요.');
   }
 
-  const guesses = await guessCount(db, game.key, gameDate);
-  if (!canReveal({ answerRecorded: true, guesses, status: round.status })) {
+  const [guesses, configured] = await Promise.all([
+    guessCount(db, game.key, gameDate),
+    chancesFor(db, game.key),
+  ]);
+  const chances = chanceStateOf(round, configured);
+  const closed = isClosed(game.key, gameDate);
+
+  if (guesses < MIN_PLAYERS_TO_REVEAL) {
     return fail(
       409,
       `예측을 낸 사람이 ${MIN_PLAYERS_TO_REVEAL}명 이상이어야 공개할 수 있어요. (지금 ${guesses}명)`,
+    );
+  }
+  if (!canReveal({ answerRecorded: true, guesses, status: round.status, ...chances, closed })) {
+    return fail(
+      409,
+      `기회를 다 써야 공개할 수 있어요. (${chances.remaining}번 남음)`,
     );
   }
 
