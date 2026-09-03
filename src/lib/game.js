@@ -9,15 +9,17 @@ import {
 import { renumberRoundsStatements } from './migrate.js';
 import { nowSecondsKST, secondsToHHMMSS, shiftDate, todayKST } from './util.js';
 
-/** 정답과의 차이(초)로 점수를 매긴다. 동점자도 각자 같은 기준으로 받는다. */
-export const SCORE_RULES = [
-  { within: 0, score: 3, label: '초까지 정확히' },
-  { within: 60, score: 2, label: '60초 이내' },
-  { within: 120, score: 1, label: '120초 이내' },
-];
+/** 그 게임의 배점표 (src/lib/games.js 에 게임마다 하나씩 적혀 있다) */
+export function scoreRulesOf(game) {
+  return gameOf(game).scoreRules;
+}
 
-export function scoreFor(diffSeconds) {
-  for (const rule of SCORE_RULES) {
+/**
+ * 정답과의 차이(초)로 점수를 매긴다. 배점은 게임마다 다르고,
+ * 위에서부터 처음 걸리는 칸의 점수를 준다. 동점자도 각자 같은 기준으로 받는다.
+ */
+export function scoreFor(game, diffSeconds) {
+  for (const rule of scoreRulesOf(game)) {
     if (diffSeconds <= rule.within) return rule.score;
   }
   return 0;
@@ -30,7 +32,7 @@ export function isClosed(game, gameDate, now = new Date()) {
   return nowSecondsKST(now) >= g.closeSeconds;
 }
 
-/** 출제자가 지금 정답을 넣을 수 있는 시간대인지 (오전 00:00~11:59 / 오후 12:00~17:59) */
+/** 출제자가 지금 정답을 넣을 수 있는 시간대인지 (오전 00:00~09:59:59 / 오후 09:00~17:59:59) */
 export function canRecordAnswer(game, gameDate, now = new Date()) {
   const g = gameOf(game);
   if (gameDate !== todayKST(now)) return false;
@@ -38,14 +40,25 @@ export function canRecordAnswer(game, gameDate, now = new Date()) {
   return sec >= g.answerFrom && sec < g.answerTo;
 }
 
+/** 정답 기록 시간대가 이미 지났는지 — 지난 날짜이거나, 오늘이라도 기록 마감이 지났으면 */
+export function answerWindowOver(game, gameDate, now = new Date()) {
+  const g = gameOf(game);
+  if (gameDate !== todayKST(now)) return true;
+  return nowSecondsKST(now) >= g.answerTo;
+}
+
 /**
  * 정답 없이 넘겨 버린 마지막 날짜.
  * 이 날짜까지는 정답이 안 들어왔으면 '게임 없음' 으로 굳는다.
+ *
+ * 기준은 정답 기록 마감이 아니라 예측 마감이다. 오전 게임은 정답 기록이 두 시간
+ * 먼저 끝나는데, 그 시각에 바로 void 로 굳혀 버리면 "출제자가 정답을 안 넣었다" 가
+ * 남들에게 새 나간다 — 그건 공개 전까지 아무도 몰라야 하는 것이다.
  */
 function answerVoidLimit(game, now = new Date()) {
   const g = gameOf(game);
   const today = todayKST(now);
-  return nowSecondsKST(now) >= g.answerTo ? today : shiftDate(today, -1);
+  return nowSecondsKST(now) >= g.closeSeconds ? today : shiftDate(today, -1);
 }
 
 /**
@@ -231,7 +244,7 @@ export async function chanceLog(db, game, gameDate) {
 /**
  * 기록해 둔 정답을 공개하고 결과를 확정한다.
  * - 오차는 |예측 - 정답| (초)
- * - 점수는 SCORE_RULES 대로, 동점이어도 각자 같은 점수를 받는다
+ * - 점수는 그 게임의 배점표(scoreRules)대로, 동점이어도 각자 같은 점수를 받는다
  * - 오차가 가장 작은 사람이 그날의 우승, 동점이면 공동 우승
  * - 예측을 제출하지 않은 사람은 결과에서 제외
  *
@@ -249,7 +262,7 @@ export async function revealRound(db, game, gameDate, round) {
 
   const scored = (guesses ?? []).map((g) => {
     const diff = Math.abs(g.guess_seconds - answerSeconds);
-    return { userId: g.user_id, diff, score: scoreFor(diff) };
+    return { userId: g.user_id, diff, score: scoreFor(key, diff) };
   });
   const best = scored.length ? Math.min(...scored.map((s) => s.diff)) : null;
 

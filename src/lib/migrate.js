@@ -192,6 +192,7 @@ export async function migrate(db) {
            PRIMARY KEY (game_date, user_id)
          )`,
       ),
+      // 게임이 나뉘기 전 기록이라 전부 오후 게임이 된다 — 오후 배점(3/2/1)으로 다시 센다
       db.prepare(
         `INSERT INTO results_new (game_date, user_id, diff_seconds, score, is_winner, created_at)
          SELECT game_date,

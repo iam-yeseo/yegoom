@@ -120,12 +120,8 @@ document.querySelector('[data-app]').innerHTML = `
 
   <section class="card">
     <div class="card__label">점수</div>
-    <ul class="rules">
-      <li><b>+3점</b> 초까지 정확히 맞힘</li>
-      <li><b>+2점</b> 60초 이내</li>
-      <li><b>+1점</b> 120초 이내</li>
-      <li><b>0점</b> 그 외</li>
-    </ul>
+    <!-- 배점은 게임마다 달라서, 서버가 내려 준 배점표를 그대로 그린다 -->
+    <ul class="rules" id="rules"></ul>
     <p class="muted" style="font-size: 13px; margin: 10px 0 0" id="rules-note">&nbsp;</p>
   </section>
 `;
@@ -139,7 +135,7 @@ const el = Object.fromEntries(
     'answer-input-wrap', 'secret', 'secret-time', 'secret-note',
     'record', 'record-clear', 'burn', 'reveal',
     'chance-box', 'chance-headline', 'chance-log', 'chance-note',
-    'admin-box', 'players', 'players-label', 'rules-note',
+    'admin-box', 'players', 'players-label', 'rules', 'rules-note',
   ].map((id) => [id.replace(/-(.)/g, (_, c) => c.toUpperCase()), document.getElementById(id)]),
 );
 
@@ -330,9 +326,11 @@ function renderSetter(state) {
     el.secretTime.textContent = mine.answer;
     el.secretNote.textContent = state.chances.used
       ? '이미 기회를 써서 이 정답은 더 바꿀 수 없어요 · 나만 볼 수 있어요'
-      : byButton
-        ? '기상 시각으로 기록해 뒀어요 · 나만 볼 수 있어요'
-        : '정답으로 기록해 뒀어요 · 나만 볼 수 있어요';
+      : mine.recordClosed
+        ? `${game.answerToLabel} 이 지나 이 정답은 더 바꿀 수 없어요 · 나만 볼 수 있어요`
+        : byButton
+          ? '기상 시각으로 기록해 뒀어요 · 나만 볼 수 있어요'
+          : '정답으로 기록해 뒀어요 · 나만 볼 수 있어요';
   }
 
   el.record.classList.toggle('hidden', !mine.canRecord);
@@ -365,7 +363,9 @@ function renderSetter(state) {
       ? '공개하지 않은 채 날짜가 지나 오늘은 게임 없음으로 끝났어요.'
       : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록하지 않아 오늘은 게임 없음으로 끝났어요.`;
   } else if (!recorded) {
-    el.setterHint.textContent = `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록해 두면 돼요. 기록했는지는 아무에게도 보이지 않아요.`;
+    el.setterHint.textContent = mine.recordClosed
+      ? `${game.answerToLabel} 이 지나 오늘은 정답을 기록할 수 없어요. 오늘은 게임 없음으로 끝나요.`
+      : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록해 두면 돼요. 기록했는지는 아무에게도 보이지 않아요.`;
   } else if (mine.needMore > 0) {
     el.setterHint.textContent = `예측이 ${game.minPlayersToReveal}명 이상 모여야 기회를 쓰거나 공개할 수 있어요. (지금 ${state.submitted}명)`;
   } else if (chancesLeft) {
@@ -452,9 +452,15 @@ async function load() {
       : `${state.closesAt} 마감 전까지 몇 번이든 바꿀 수 있어요.`;
   }
 
+  // 배점표 — 위에서부터 처음 걸리는 칸의 점수를 받는다
+  el.rules.innerHTML =
+    (game.scoreRules ?? [])
+      .map((r) => `<li><b>+${r.score}점</b> ${escapeHtml(r.label)}${r.within === 0 ? ' 맞힘' : ''}</li>`)
+      .join('') + '<li><b>0점</b> 그 외</li>';
+
   el.rulesNote.textContent =
-    '동점이어도 각자 같은 기준으로 점수를 받아요. 오전 게임과 오후 게임은 회차를 따로 세고, ' +
-    '랭킹에서는 합쳐서도 볼 수 있어요.';
+    '동점이어도 각자 같은 기준으로 점수를 받아요. 배점은 게임마다 달라요. ' +
+    '오전 게임과 오후 게임은 회차를 따로 세고, 랭킹에서는 합쳐서도 볼 수 있어요.';
 
   // 참가자 목록
   el.playersLabel.textContent = state.revealed ? '결과' : '참가자';

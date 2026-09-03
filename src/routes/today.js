@@ -1,7 +1,7 @@
 import { json, personOf, requireUser, secondsToHHMMSS, todayKST } from '../lib/util.js';
 import {
-  canBurnChance, canRecordAnswer, canReveal, chanceLog, chanceStateOf, closeExpiredRounds,
-  formatDiff, formatScore, isClosed, roundNumberFor,
+  answerWindowOver, canBurnChance, canRecordAnswer, canReveal, chanceLog, chanceStateOf,
+  closeExpiredRounds, formatDiff, formatScore, isClosed, roundNumberFor,
 } from '../lib/game.js';
 import { MIN_PLAYERS_TO_REVEAL, gameInfo, gameOf } from '../lib/games.js';
 import { chancesFor } from '../lib/config.js';
@@ -144,6 +144,8 @@ export async function onRequestGet(context) {
           // 기회를 이미 썼다면 그 힌트가 이 정답을 기준으로 나갔으므로 더는 못 바꾼다
           canRecord:
             status === 'open' && !chances.used && canRecordAnswer(game.key, gameDate),
+          // 기록 시간대가 이미 지났는지 — 오전은 10시 정각부터 기록도 수정도 못 한다
+          recordClosed: answerWindowOver(game.key, gameDate),
           canBurnChance: canBurnChance({
             answerRecorded, guesses: submitted, status, remaining: chances.remaining,
           }),

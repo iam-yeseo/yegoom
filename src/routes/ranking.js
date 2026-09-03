@@ -28,7 +28,7 @@ export async function onRequestGet(context) {
             u.photo_version,
             COUNT(r.game_date)                                          AS played,
             COALESCE(SUM(r.score), 0)                                   AS score,
-            COALESCE(SUM(CASE WHEN r.score = 3 THEN 1 ELSE 0 END), 0)   AS exacts,
+            COALESCE(SUM(CASE WHEN r.diff_seconds = 0 THEN 1 ELSE 0 END), 0) AS exacts,
             COALESCE(SUM(r.is_winner), 0)                               AS wins,
             CAST(ROUND(AVG(r.diff_seconds)) AS INTEGER)                 AS avg_diff,
             MIN(r.diff_seconds)                                         AS best_diff,
