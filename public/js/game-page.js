@@ -109,6 +109,14 @@ document.querySelector('[data-app]').innerHTML = `
     <a class="btn btn--ghost" href="/admin">운영 화면으로</a>
   </section>
 
+  <!-- 예측을 확정해 두고 정답이 공개되기를 기다리는 동안 -->
+  <section id="wait-box" class="card wait hidden" aria-live="polite">
+    <p class="wait__title">
+      <span class="wait__dots" aria-hidden="true"><i></i><i></i><i></i></span>정답 공개 대기 중
+    </p>
+    <p class="wait__note" id="wait-note"></p>
+  </section>
+
   <section class="card">
     <div class="card__label" id="players-label">참가자</div>
     <div id="players">
@@ -135,7 +143,7 @@ const el = Object.fromEntries(
     'answer-input-wrap', 'secret', 'secret-time', 'secret-note',
     'record', 'record-clear', 'burn', 'reveal',
     'chance-box', 'chance-headline', 'chance-log', 'chance-note',
-    'admin-box', 'players', 'players-label', 'rules', 'rules-note',
+    'admin-box', 'wait-box', 'wait-note', 'players', 'players-label', 'rules', 'rules-note',
   ].map((id) => [id.replace(/-(.)/g, (_, c) => c.toUpperCase()), document.getElementById(id)]),
 );
 
@@ -461,6 +469,16 @@ async function load() {
   el.rulesNote.textContent =
     '동점이어도 각자 같은 기준으로 점수를 받아요. 배점은 게임마다 달라요. ' +
     '오전 게임과 오후 게임은 회차를 따로 세고, 랭킹에서는 합쳐서도 볼 수 있어요.';
+
+  // 정답 공개 대기 — 내 예측을 확정해 둔 참가자에게만 뜬다.
+  // 출제자가 정답을 기록했는지는 아무에게도 알릴 수 없으므로, 여기서 기다리는 것은
+  // '기록' 이 아니라 '공개' 다. (출제자 본인은 자기 카드에서 상태를 본다)
+  const waiting = !state.revealed && state.status === 'open' && !state.isSetter && !!state.myGuess;
+  el.waitBox.classList.toggle('hidden', !waiting);
+  if (waiting) {
+    el.waitNote.textContent =
+      `내 예측 ${state.myGuess} · 출제자가 정답을 공개하면 오차와 점수가 바로 확정돼요.`;
+  }
 
   // 참가자 목록
   el.playersLabel.textContent = state.revealed ? '결과' : '참가자';
