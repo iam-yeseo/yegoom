@@ -1,7 +1,7 @@
 // 출제자가 자기 게임의 정답을 서버에만 적어 두는 곳.
 //
-// 오전 게임은 '기상했어요' 버튼을 누른 시각이 곧 정답이고,
-// 오후 게임은 출제자가 퇴근할 시간을 직접 적는다.
+// 오전 게임은 '기상했어요' 버튼을 누른 시각이 곧 정답이고 (그날 안에는 시간 제한 없이
+// 언제든 기록하고 고칠 수 있다), 오후 게임은 출제자가 퇴근할 시간을 직접 적는다.
 //
 // 여기 적힌 정답은 공개 전까지 출제자 본인 말고 아무에게도 내려가지 않는다.
 // 라운드 status 도 'open' 그대로라, 남들은 정답이 기록됐는지조차 알 수 없다.
@@ -10,7 +10,7 @@ import {
   fail, json, normalizeSeconds, nowSecondsKST, readJson, requireUser, secondsToHHMMSS, todayKST,
 } from '../lib/util.js';
 import { canRecordAnswer } from '../lib/game.js';
-import { gameOf } from '../lib/games.js';
+import { answersAllDay, gameOf } from '../lib/games.js';
 import { chancesFor } from '../lib/config.js';
 import { getSetter } from '../lib/setter.js';
 
@@ -60,7 +60,9 @@ export async function onRequestPost(context) {
   if (!canRecordAnswer(game.key, gameDate)) {
     return fail(
       409,
-      `${game.label} 정답은 ${game.answerFromLabel} ~ ${game.answerToLabel} 사이에만 기록할 수 있어요.`,
+      answersAllDay(game)
+        ? `${game.label} 정답은 그날 안에만 기록할 수 있어요.`
+        : `${game.label} 정답은 ${game.answerFromLabel} ~ ${game.answerToLabel} 사이에만 기록할 수 있어요.`,
     );
   }
 
@@ -109,7 +111,12 @@ export async function onRequestDelete(context) {
   if (response) return response;
 
   if (!canRecordAnswer(game.key, gameDate)) {
-    return fail(409, `${game.answerToLabel} 이 지나 기록을 되돌릴 수 없어요.`);
+    return fail(
+      409,
+      answersAllDay(game)
+        ? '날짜가 지나 기록을 되돌릴 수 없어요.'
+        : `${game.answerToLabel} 이 지나 기록을 되돌릴 수 없어요.`,
+    );
   }
 
   await db

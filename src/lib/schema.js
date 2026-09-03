@@ -127,7 +127,8 @@ export const SCHEMA_STATEMENTS = [
 
   // 정답 공개 시점에 확정되는 결과.
   //   diff_seconds = |예측 - 정답| (초)
-  //   score        = 0초 차이 3점 / 60초 이내 2점 / 120초 이내 1점 / 그 외 0점
+  //   score        = 그 게임의 배점표(src/lib/games.js 의 scoreRules)대로 매긴 점수.
+  //                  오전과 오후의 배점이 달라서, 공개 시점의 규칙이 그대로 굳는다.
   `CREATE TABLE IF NOT EXISTS results (
      game         TEXT    NOT NULL CHECK (game IN ('morning', 'evening')),
      game_date    TEXT    NOT NULL,

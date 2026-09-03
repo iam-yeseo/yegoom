@@ -4,7 +4,7 @@
 // 시간대와 "출제자가 정답을 넣는 방식" 뿐이다. 그 차이를 전부 여기 모아 둔다.
 //
 //   오전  기상시간 맞히기 — 출제자가 '기상했어요' 버튼을 누른 시각이 정답
-//         정답 기록 00:00 ~ 11:59 · 예측 마감 12:00
+//         정답 기록 하루 중 언제든 · 예측 마감 10:00
 //   오후  퇴근시간 맞히기 — 출제자가 시간을 직접 적어 둔다
 //         정답 기록 09:00 ~ 17:59 · 예측 마감 18:00 · '기회' 를 쓴다
 //
@@ -13,6 +13,11 @@
 // 그때까지 예측한 사람 중 정답에 가장 가까운 한 명에게 하이라이트가 들어가고
 // (5분 이상 벌어져 있으면 아무도 안 나온다), 남은 기회 수가 참가자에게 알려진다.
 // 기회를 다 쓰면 그때부터 정답을 공개할 수 있다. 횟수는 운영자가 /setup 에서 정한다.
+//
+// 점수 — 규칙의 모양(가까울수록 높은 점수)은 같지만 배점은 게임마다 다르다.
+// 오전 게임은 정확히 맞히기가 훨씬 어려워서 정답에 100점을 몰아주고, 그 아래는
+// 1시간까지 넓게 잘게 나눈다. 배점표는 게임 정의의 scoreRules 하나에만 있고,
+// 서버 채점과 화면의 '점수' 안내가 같은 표를 읽는다.
 //
 // 두 게임 모두, 출제자가 정답을 넣었는지 여부는 출제자 본인 말고는 아무도 알 수
 // 없다 (DB 에만 남고 status 는 공개 전까지 계속 'open' 이다).
@@ -29,13 +34,26 @@ export const GAMES = {
     subject: '기상시간',
     path: '/morning',
     // 정답을 넣을 수 있는 시간대 (KST, [부터, 까지))
+    // 오전은 하루 종일 열려 있다 — 늦게 일어난 날도 그 시각이 그대로 정답이고,
+    // 그날 안에는 몇 번이든 다시 누르거나 지울 수 있다.
     answerFrom: 0,
-    answerTo: 12 * 3600,
+    answerTo: 24 * 3600,
+    // 하루 종일이라 화면에서는 이 라벨 대신 '언제든' 으로 안내한다 (answerAllDay)
     answerFromLabel: '00:00',
-    answerToLabel: '12:00',
-    // 예측 마감 — 정답 기록 마감과 같은 시각이다
-    closeSeconds: 12 * 3600,
-    closeLabel: '12:00',
+    answerToLabel: '24:00',
+    // 예측 마감 — 예측은 10시에 닫힌다 (정답 기록과는 별개다)
+    closeSeconds: 10 * 3600,
+    closeLabel: '10:00',
+    // 배점 — 위에서부터 처음 걸리는 칸의 점수를 받는다
+    scoreRules: [
+      { within: 0, score: 100, label: '초까지 정확히' },
+      { within: 60, score: 10, label: '1분 이내' },
+      { within: 3 * 60, score: 8, label: '3분 이내' },
+      { within: 5 * 60, score: 6, label: '5분 이내' },
+      { within: 10 * 60, score: 3, label: '10분 이내' },
+      { within: 30 * 60, score: 2, label: '30분 이내' },
+      { within: 60 * 60, score: 1, label: '1시간 이내' },
+    ],
     // 정답을 넣는 방식: 'button' 은 버튼을 누른 시각이 그대로 정답이 된다
     answerMode: 'button',
     answerButton: '기상했어요',
@@ -60,6 +78,11 @@ export const GAMES = {
     answerToLabel: '18:00',
     closeSeconds: 18 * 3600,
     closeLabel: '18:00',
+    scoreRules: [
+      { within: 0, score: 3, label: '초까지 정확히' },
+      { within: 60, score: 2, label: '60초 이내' },
+      { within: 120, score: 1, label: '120초 이내' },
+    ],
     // 'time' 은 출제자가 시간을 직접 적어 둔다
     answerMode: 'time',
     answerButton: '정답 기록하기',
@@ -101,9 +124,18 @@ export function gameOf(value) {
   return GAMES[gameKeyOf(value) ?? 'evening'];
 }
 
-/** 지금 시각(자정부터의 초)에 해당하는 게임 — 오전 12시 전이면 오전 게임 */
+/** 지금 시각(자정부터의 초)에 해당하는 게임 — 오전 게임이 마감되기 전이면 오전 */
 export function gameAt(seconds) {
-  return seconds < GAMES.morning.answerTo ? GAMES.morning : GAMES.evening;
+  return seconds < GAMES.morning.closeSeconds ? GAMES.morning : GAMES.evening;
+}
+
+/**
+ * 정답을 하루 종일 넣을 수 있는 게임인지.
+ * 오전 게임은 기록 시간대가 따로 없어서, 화면과 안내 문구가 이 값으로 갈린다.
+ */
+export function answersAllDay(game) {
+  const g = typeof game === 'string' ? gameOf(game) : game;
+  return g.answerFrom === 0 && g.answerTo >= 24 * 3600;
 }
 
 /** 화면에 내려 줄 게임 정보 (서버 내부용 필드는 빼고) */
@@ -122,7 +154,10 @@ export function gameInfo(game) {
     useChances: g.useChances,
     answerFromLabel: g.answerFromLabel,
     answerToLabel: g.answerToLabel,
+    answerAllDay: answersAllDay(g),
     closeLabel: g.closeLabel,
+    // 화면의 '점수' 안내가 서버와 같은 배점표를 읽도록 그대로 내려 준다
+    scoreRules: g.scoreRules.map((r) => ({ ...r })),
     minPlayersToReveal: MIN_PLAYERS_TO_REVEAL,
     closeEnoughSeconds: CLOSE_ENOUGH_SECONDS,
   };

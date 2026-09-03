@@ -1,7 +1,7 @@
 import { json, personOf, requireUser, secondsToHHMMSS, todayKST } from '../lib/util.js';
 import {
-  canBurnChance, canRecordAnswer, canReveal, chanceLog, chanceStateOf, closeExpiredRounds,
-  formatDiff, formatScore, isClosed, roundNumberFor,
+  answerWindowOver, canBurnChance, canRecordAnswer, canReveal, chanceLog, chanceStateOf,
+  closeExpiredRounds, formatDiff, formatScore, isClosed, roundNumberFor,
 } from '../lib/game.js';
 import { MIN_PLAYERS_TO_REVEAL, gameInfo, gameOf } from '../lib/games.js';
 import { chancesFor } from '../lib/config.js';
@@ -55,7 +55,9 @@ export async function onRequestGet(context) {
     chancesFor(db, game.key),
   ]);
 
-  const status = round?.status ?? (isClosed(game.key, gameDate) ? 'void' : 'open');
+  // 라운드 행이 아직 없는 날의 기본 상태. 오전 게임은 예측이 닫힌 뒤에도 정답을
+  // 넣을 수 있어서, '게임 없음' 판단은 예측 마감이 아니라 정답 기록 마감으로 한다.
+  const status = round?.status ?? (answerWindowOver(game.key, gameDate) ? 'void' : 'open');
   const revealed = status === 'settled';
   const closed = revealed || status === 'void' || isClosed(game.key, gameDate);
   const roundNo = await roundNumberFor(db, game.key, round);
