@@ -348,7 +348,13 @@ input[type='date'] {
 }
 
 .rules li:first-child { border-top: none; padding-top: 0; }
-.rules b { flex: 0 0 46px; color: var(--accent-2); font-variant-numeric: tabular-nums; }
+/* 점수 칸은 '+100점' 까지 한 줄에 들어가야 한다 (오전 게임 배점) */
+.rules b {
+  flex: 0 0 58px;
+  white-space: nowrap;
+  color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+}
 
 /* ---------- 프로필 사진 ---------- */
 
@@ -703,6 +709,39 @@ input[type='date'] {
 .auth__logo { font-size: 46px; text-align: center; line-height: 1; }
 .auth__title { margin: 12px 0 2px; font-size: 26px; font-weight: 900; text-align: center; letter-spacing: -0.03em; }
 .auth__sub { margin: 0 0 26px; font-size: 14px; text-align: center; color: var(--muted); }
+
+/* ---------- 정답 공개 대기 ---------- */
+
+/* 예측을 확정해 두고 결과를 기다리는 동안 뜨는 칸. 점 세 개가 차례로 밝아진다. */
+.wait__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wait__dots { display: flex; flex: 0 0 auto; gap: 6px; }
+
+.wait__dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-2);
+  opacity: 0.28;
+  animation: wait-pulse 1.2s ease-in-out infinite;
+}
+
+.wait__dots i:nth-child(2) { animation-delay: 0.18s; }
+.wait__dots i:nth-child(3) { animation-delay: 0.36s; }
+
+.wait__note { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+
+@keyframes wait-pulse {
+  0%, 100% { opacity: 0.28; transform: scale(1); }
+  50%      { opacity: 1;    transform: scale(1.25); }
+}
 
 .skeleton {
   height: 14px;
