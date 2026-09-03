@@ -392,7 +392,11 @@ input[type='date'] {
   vertical-align: -8px;
 }
 
-.person-chip { display: inline-flex; align-items: center; gap: 6px; }
+/* 문장 속에 끼워 넣는 덩어리라 이름과 앞뒤 문장이 같은 기준선에 앉아야 한다.
+   inline-flex 로 두면 칩의 기준선이 아바타 아래끝이 되어 뒤 문장만 내려앉는다.
+   줄글 그대로 두고, 아바타는 .avatar-chip 의 vertical-align 이 맞춰 준다. */
+.person-chip { white-space: nowrap; }
+.person-chip .avatar-chip { margin-right: 6px; }
 
 /* ---------- 프로필 편집 ---------- */
 
