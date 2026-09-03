@@ -326,11 +326,9 @@ function renderSetter(state) {
     el.secretTime.textContent = mine.answer;
     el.secretNote.textContent = state.chances.used
       ? '이미 기회를 써서 이 정답은 더 바꿀 수 없어요 · 나만 볼 수 있어요'
-      : mine.recordClosed
-        ? `${game.answerToLabel} 이 지나 이 정답은 더 바꿀 수 없어요 · 나만 볼 수 있어요`
-        : byButton
-          ? '기상 시각으로 기록해 뒀어요 · 나만 볼 수 있어요'
-          : '정답으로 기록해 뒀어요 · 나만 볼 수 있어요';
+      : byButton
+        ? '기상 시각으로 기록해 뒀어요 · 나만 볼 수 있어요'
+        : '정답으로 기록해 뒀어요 · 나만 볼 수 있어요';
   }
 
   el.record.classList.toggle('hidden', !mine.canRecord);
@@ -361,10 +359,12 @@ function renderSetter(state) {
   } else if (state.status === 'void') {
     el.setterHint.textContent = recorded
       ? '공개하지 않은 채 날짜가 지나 오늘은 게임 없음으로 끝났어요.'
-      : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록하지 않아 오늘은 게임 없음으로 끝났어요.`;
+      : game.answerAllDay
+        ? '정답을 기록하지 않은 채 날짜가 지나 게임 없음으로 끝났어요.'
+        : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록하지 않아 오늘은 게임 없음으로 끝났어요.`;
   } else if (!recorded) {
-    el.setterHint.textContent = mine.recordClosed
-      ? `${game.answerToLabel} 이 지나 오늘은 정답을 기록할 수 없어요. 오늘은 게임 없음으로 끝나요.`
+    el.setterHint.textContent = game.answerAllDay
+      ? '오늘 안에 언제든 기록해 두면 돼요. 기록했는지는 아무에게도 보이지 않아요.'
       : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록해 두면 돼요. 기록했는지는 아무에게도 보이지 않아요.`;
   } else if (mine.needMore > 0) {
     el.setterHint.textContent = `예측이 ${game.minPlayersToReveal}명 이상 모여야 기회를 쓰거나 공개할 수 있어요. (지금 ${state.submitted}명)`;

@@ -55,7 +55,9 @@ export async function onRequestGet(context) {
     chancesFor(db, game.key),
   ]);
 
-  const status = round?.status ?? (isClosed(game.key, gameDate) ? 'void' : 'open');
+  // 라운드 행이 아직 없는 날의 기본 상태. 오전 게임은 예측이 닫힌 뒤에도 정답을
+  // 넣을 수 있어서, '게임 없음' 판단은 예측 마감이 아니라 정답 기록 마감으로 한다.
+  const status = round?.status ?? (answerWindowOver(game.key, gameDate) ? 'void' : 'open');
   const revealed = status === 'settled';
   const closed = revealed || status === 'void' || isClosed(game.key, gameDate);
   const roundNo = await roundNumberFor(db, game.key, round);
@@ -144,8 +146,6 @@ export async function onRequestGet(context) {
           // 기회를 이미 썼다면 그 힌트가 이 정답을 기준으로 나갔으므로 더는 못 바꾼다
           canRecord:
             status === 'open' && !chances.used && canRecordAnswer(game.key, gameDate),
-          // 기록 시간대가 이미 지났는지 — 오전은 10시 정각부터 기록도 수정도 못 한다
-          recordClosed: answerWindowOver(game.key, gameDate),
           canBurnChance: canBurnChance({
             answerRecorded, guesses: submitted, status, remaining: chances.remaining,
           }),

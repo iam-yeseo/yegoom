@@ -4,7 +4,7 @@
 // src/lib/games.js 의 정의에서 가져온다.
 
 import {
-  CLOSE_ENOUGH_SECONDS, GAMES, GAME_KEYS, MIN_PLAYERS_TO_REVEAL, gameOf,
+  CLOSE_ENOUGH_SECONDS, GAME_KEYS, MIN_PLAYERS_TO_REVEAL, gameOf,
 } from './games.js';
 import { renumberRoundsStatements } from './migrate.js';
 import { nowSecondsKST, secondsToHHMMSS, shiftDate, todayKST } from './util.js';
@@ -32,7 +32,7 @@ export function isClosed(game, gameDate, now = new Date()) {
   return nowSecondsKST(now) >= g.closeSeconds;
 }
 
-/** 출제자가 지금 정답을 넣을 수 있는 시간대인지 (오전 00:00~09:59:59 / 오후 09:00~17:59:59) */
+/** 출제자가 지금 정답을 넣을 수 있는 시간대인지 (오전은 하루 종일 / 오후 09:00~17:59:59) */
 export function canRecordAnswer(game, gameDate, now = new Date()) {
   const g = gameOf(game);
   if (gameDate !== todayKST(now)) return false;
@@ -40,7 +40,10 @@ export function canRecordAnswer(game, gameDate, now = new Date()) {
   return sec >= g.answerFrom && sec < g.answerTo;
 }
 
-/** 정답 기록 시간대가 이미 지났는지 — 지난 날짜이거나, 오늘이라도 기록 마감이 지났으면 */
+/**
+ * 정답 기록이 이미 끝난 날인지 — 지난 날짜이거나, 오늘이라도 기록 마감이 지났으면.
+ * 오전 게임은 하루 종일 기록할 수 있어서, 날짜가 바뀌어야 끝난 것이 된다.
+ */
 export function answerWindowOver(game, gameDate, now = new Date()) {
   const g = gameOf(game);
   if (gameDate !== todayKST(now)) return true;
@@ -51,14 +54,13 @@ export function answerWindowOver(game, gameDate, now = new Date()) {
  * 정답 없이 넘겨 버린 마지막 날짜.
  * 이 날짜까지는 정답이 안 들어왔으면 '게임 없음' 으로 굳는다.
  *
- * 기준은 정답 기록 마감이 아니라 예측 마감이다. 오전 게임은 정답 기록이 두 시간
- * 먼저 끝나는데, 그 시각에 바로 void 로 굳혀 버리면 "출제자가 정답을 안 넣었다" 가
- * 남들에게 새 나간다 — 그건 공개 전까지 아무도 몰라야 하는 것이다.
+ * 기준은 예측 마감이 아니라 정답 기록 마감이다. 오전 게임은 예측이 10시에 닫힌
+ * 뒤에도 출제자가 정답을 넣을 수 있으니, 그날은 날짜가 바뀌어야 굳는다.
  */
 function answerVoidLimit(game, now = new Date()) {
   const g = gameOf(game);
   const today = todayKST(now);
-  return nowSecondsKST(now) >= g.closeSeconds ? today : shiftDate(today, -1);
+  return nowSecondsKST(now) >= g.answerTo ? today : shiftDate(today, -1);
 }
 
 /**
@@ -76,7 +78,7 @@ export async function closeExpiredRounds(db, now = new Date()) {
   let closed = false;
 
   for (const key of GAME_KEYS) {
-    const limit = answerVoidLimit(GAMES[key], now);
+    const limit = answerVoidLimit(key, now);
 
     const pending = await db
       .prepare(

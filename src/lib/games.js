@@ -4,7 +4,7 @@
 // 시간대와 "출제자가 정답을 넣는 방식" 뿐이다. 그 차이를 전부 여기 모아 둔다.
 //
 //   오전  기상시간 맞히기 — 출제자가 '기상했어요' 버튼을 누른 시각이 정답
-//         정답 기록 00:00 ~ 09:59:59 · 예측 마감 12:00
+//         정답 기록 하루 중 언제든 · 예측 마감 10:00
 //   오후  퇴근시간 맞히기 — 출제자가 시간을 직접 적어 둔다
 //         정답 기록 09:00 ~ 17:59 · 예측 마감 18:00 · '기회' 를 쓴다
 //
@@ -34,15 +34,16 @@ export const GAMES = {
     subject: '기상시간',
     path: '/morning',
     // 정답을 넣을 수 있는 시간대 (KST, [부터, 까지))
-    // 늦잠까지 정답으로 받아 주면 게임이 늘어져서, 10시 정각부터는 못 넣는다.
-    // 09:59:59 까지는 몇 번이든 다시 누르거나 지울 수 있다.
+    // 오전은 하루 종일 열려 있다 — 늦게 일어난 날도 그 시각이 그대로 정답이고,
+    // 그날 안에는 몇 번이든 다시 누르거나 지울 수 있다.
     answerFrom: 0,
-    answerTo: 10 * 3600,
+    answerTo: 24 * 3600,
+    // 하루 종일이라 화면에서는 이 라벨 대신 '언제든' 으로 안내한다 (answerAllDay)
     answerFromLabel: '00:00',
-    answerToLabel: '10:00',
-    // 예측 마감 — 정답 기록이 끝난 뒤에도 12시까지는 예측을 받는다
-    closeSeconds: 12 * 3600,
-    closeLabel: '12:00',
+    answerToLabel: '24:00',
+    // 예측 마감 — 예측은 10시에 닫힌다 (정답 기록과는 별개다)
+    closeSeconds: 10 * 3600,
+    closeLabel: '10:00',
     // 배점 — 위에서부터 처음 걸리는 칸의 점수를 받는다
     scoreRules: [
       { within: 0, score: 100, label: '초까지 정확히' },
@@ -123,9 +124,18 @@ export function gameOf(value) {
   return GAMES[gameKeyOf(value) ?? 'evening'];
 }
 
-/** 지금 시각(자정부터의 초)에 해당하는 게임 — 오전 12시 전이면 오전 게임 */
+/** 지금 시각(자정부터의 초)에 해당하는 게임 — 오전 게임이 마감되기 전이면 오전 */
 export function gameAt(seconds) {
   return seconds < GAMES.morning.closeSeconds ? GAMES.morning : GAMES.evening;
+}
+
+/**
+ * 정답을 하루 종일 넣을 수 있는 게임인지.
+ * 오전 게임은 기록 시간대가 따로 없어서, 화면과 안내 문구가 이 값으로 갈린다.
+ */
+export function answersAllDay(game) {
+  const g = typeof game === 'string' ? gameOf(game) : game;
+  return g.answerFrom === 0 && g.answerTo >= 24 * 3600;
 }
 
 /** 화면에 내려 줄 게임 정보 (서버 내부용 필드는 빼고) */
@@ -144,6 +154,7 @@ export function gameInfo(game) {
     useChances: g.useChances,
     answerFromLabel: g.answerFromLabel,
     answerToLabel: g.answerToLabel,
+    answerAllDay: answersAllDay(g),
     closeLabel: g.closeLabel,
     // 화면의 '점수' 안내가 서버와 같은 배점표를 읽도록 그대로 내려 준다
     scoreRules: g.scoreRules.map((r) => ({ ...r })),

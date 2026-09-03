@@ -103,14 +103,14 @@ export const GAMES = {
   },
 };
 
-/** 지금(KST) 진행 중인 게임 — 12시 전이면 오전 */
+/** 지금(KST) 진행 중인 게임 — 오전 게임 마감(10:00) 전이면 오전 */
 export function currentGameKey(now = new Date()) {
   const hour = Number(
     new Intl.DateTimeFormat('en-GB', {
       timeZone: 'Asia/Seoul', hour: '2-digit', hour12: false,
     }).format(now),
   );
-  return hour % 24 < 12 ? 'morning' : 'evening';
+  return hour % 24 < 10 ? 'morning' : 'evening';
 }
 
 /* ---------------- 하단 탭바 ---------------- */
