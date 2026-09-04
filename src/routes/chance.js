@@ -36,7 +36,7 @@ export async function onRequestPost(context) {
     return fail(403, '정답을 기록한 출제자만 기회를 쓸 수 있습니다.');
   }
   if (round.status === 'settled') return fail(409, '이미 정답을 공개했어요.');
-  if (round.status === 'void') return fail(409, `오늘 ${game.label}은 이미 끝났어요.`);
+  if (round.status === 'void') return fail(409, `오늘 ${game.label}는 이미 끝났어요.`);
   if (round.answer_seconds === null || round.answer_seconds === undefined) {
     return fail(409, '아직 정답을 기록하지 않았어요.');
   }

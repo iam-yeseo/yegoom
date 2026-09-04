@@ -38,7 +38,7 @@ async function requireSetter(context, game) {
     return { response: fail(409, '이미 정답을 공개해서 바꿀 수 없습니다.') };
   }
   if (round?.status === 'void') {
-    return { response: fail(409, `오늘 ${game.label}은 이미 끝났어요.`) };
+    return { response: fail(409, `오늘 ${game.label}는 이미 끝났어요.`) };
   }
   // 기회를 한 번이라도 썼다면 그 힌트가 이 정답을 기준으로 나간 뒤다.
   // 이제 와서 정답을 바꾸면 앞의 힌트가 거짓말이 되므로 잠근다.

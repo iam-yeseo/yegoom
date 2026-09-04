@@ -13,8 +13,8 @@
 //
 // 퀴즈가 언제 끝나는지는 출제자가 문제를 내면서 고른다 (진행 방식).
 //   🎈 자유       출제자가 끝낼 때까지
-//   ⚡ 선착순 1명  첫 정답이 나오면 그 자리에서
-//   ⏱️ 제한시간    정해 둔 시간이 지나면 자동으로
+//   ⚡ 선착순     첫 정답이 나오면 그 자리에서
+//   ⏱️ 타임어택    정해 둔 시간이 지나면 자동으로
 // 뒤 둘은 서버가 알아서 끝내므로, 화면은 남은 시간을 세어 보여 주기만 한다.
 //
 // 눌러서 벌어진 일은 화면 아래 토스트로 알린다. 화면 맨 위에 붙는 안내문은
@@ -25,13 +25,13 @@
 // 등장 애니메이션이 15초마다 다시 도는 일이 없다.
 
 import {
-  QUIZ, api, avatarOf, escapeHtml, personChip, playOnce, renderTabbar, requireLogin,
+  QUIZ, api, avatarOf, escapeHtml, pageTitle, personChip, playOnce, renderTabbar, requireLogin,
   revealChildren, roundLabel, setHidden, setHtml, startClock,
 } from '/js/common.js';
 import { confirmDialog, showToast } from '/js/ui.js';
 import { shrinkPhoto } from '/js/photo-picker.js';
 
-document.title = QUIZ.label;
+document.title = pageTitle(QUIZ.label);
 
 document.querySelector('[data-app]').innerHTML = `
   <header class="clock">
@@ -594,7 +594,7 @@ function renderRules(game) {
   el.rulesNote.textContent =
     '가장 먼저 정답을 낸 사람이 다음 출제자가 돼요. 점수는 맞히는 순간 확정되고, ' +
     '아무리 깎여도 0점 밑으로는 내려가지 않아요. 퀴즈 점수는 랭킹의 전체 합계에도 들어가요. ' +
-    '퀴즈가 언제 끝나는지는 출제자가 고른 진행 방식(자유 · 선착순 1명 · 제한시간)을 따라요.';
+    '퀴즈가 언제 끝나는지는 출제자가 고른 진행 방식(자유 · 선착순 · 타임어택)을 따라요.';
 }
 
 /** 출제 차례 안내 */
@@ -779,7 +779,7 @@ function renderPlay(state) {
   el.playScore.textContent = `지금 맞히면 ${me.potentialScore}점`;
 
   const parts = [];
-  if (quiz.mode === 'first') parts.push('선착순 1명 — 맞히면 이 퀴즈가 바로 끝나요');
+  if (quiz.mode === 'first') parts.push('선착순 — 맞히면 이 퀴즈가 바로 끝나요');
   parts.push(me.wouldBeFirst
     ? `아직 아무도 못 맞혔어요 (첫 정답 ${state.game.firstScore}점)`
     : `이미 맞힌 사람이 있어요 (${state.game.nextScore}점)`);

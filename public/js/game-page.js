@@ -14,8 +14,8 @@
 // 애니메이션이 갱신 때마다 다시 돌지 않는다.
 
 import {
-  GAMES, api, avatarOf, escapeHtml, personChip, renderTabbar, requireLogin, revealChildren,
-  roundLabel, setHidden, setHtml, startClock,
+  GAMES, api, avatarOf, escapeHtml, pageTitle, personChip, renderTabbar, requireLogin,
+  revealChildren, roundLabel, setHidden, setHtml, startClock,
 } from '/js/common.js';
 import { confirmDialog, showToast } from '/js/ui.js';
 import { createTimeInput } from '/js/time-input.js';
@@ -26,7 +26,7 @@ const GAME = GAMES[gameKey];
 /** 예측 입력칸의 기본값 — 오전은 아침, 오후는 정시 퇴근 */
 const DEFAULT_GUESS = gameKey === 'morning' ? '07:00:00' : '18:00:00';
 
-document.title = `${GAME.label} · ${GAME.title}`;
+document.title = pageTitle(GAME.label);
 
 document.querySelector('[data-app]').innerHTML = `
   <header class="clock">
@@ -78,7 +78,7 @@ document.querySelector('[data-app]').innerHTML = `
       <div class="profile-preview__avatar" id="setter-avatar" aria-hidden="true">🙂</div>
       <div>
         <div class="profile-preview__name" id="setter-name">&nbsp;</div>
-        <div class="muted" style="font-size: 13px">오늘의 출제자는 나예요</div>
+        <div class="muted" style="font-size: 13px">오늘은 내가 출제해요</div>
       </div>
     </div>
 
@@ -110,7 +110,7 @@ document.querySelector('[data-app]').innerHTML = `
   <section id="admin-box" class="card hidden">
     <div class="card__label">운영자</div>
     <p style="margin: 0 0 12px">
-      정답은 출제자가 직접 기록하고 공개합니다. 운영자에게도 기록 여부는 보이지 않아요.
+      정답은 출제자가 직접 기록하고 공개합니다. 정답은 운영자도 몰라요.
     </p>
     <a class="btn btn--ghost" href="/admin">운영 화면으로</a>
   </section>
@@ -391,7 +391,7 @@ function renderSetter(state) {
   el.reveal.disabled = !mine.canReveal;
 
   if (state.revealed) {
-    el.setterHint.textContent = '정답을 공개했어요. 오늘은 내가 출제자였습니다.';
+    el.setterHint.textContent = '정답을 공개했어요.';
   } else if (state.status === 'void') {
     el.setterHint.textContent = recorded
       ? '공개하지 않은 채 날짜가 지나 오늘은 게임 없음으로 끝났어요.'
@@ -400,8 +400,8 @@ function renderSetter(state) {
         : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록하지 않아 오늘은 게임 없음으로 끝났어요.`;
   } else if (!recorded) {
     el.setterHint.textContent = game.answerAllDay
-      ? '오늘 안에 언제든 기록해 두면 돼요. 기록했는지는 아무에게도 보이지 않아요.'
-      : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록해 두면 돼요. 기록했는지는 아무에게도 보이지 않아요.`;
+      ? '오늘 안에 언제든 기록해 두면 돼요. 정답은 운영자도 몰라요.'
+      : `${game.answerFromLabel} ~ ${game.answerToLabel} 사이에 기록해 두면 돼요. 정답은 운영자도 몰라요.`;
   } else if (mine.needMore > 0) {
     el.setterHint.textContent = `예측이 ${game.minPlayersToReveal}명 이상 모여야 기회를 쓰거나 공개할 수 있어요. (지금 ${state.submitted}명)`;
   } else if (chancesLeft) {
@@ -458,7 +458,7 @@ async function load() {
   setHidden(el.closedBox, !voided);
   if (voided) {
     el.closedText.textContent = state.isToday
-      ? `오늘 ${game.label}은 없던 일이 됐어요. 출제자가 정답을 기록하지 않은 날은 회차도 올라가지 않아요.`
+      ? `오늘 ${game.label}는 없던 일이 됐어요. 출제자가 정답을 기록하지 않은 날은 회차도 올라가지 않아요.`
       : '정답 없이 끝난 날이에요 (게임 없음).';
   }
 
