@@ -17,6 +17,7 @@
 //                  (표만 새로 만들면 되므로 0단계에서 함께 처리된다)
 //   퀴즈 진행 방식 : quiz_rounds 에 mode / time_limit_sec / deadline_at / closed_reason 추가
 //                  (기존 퀴즈는 전부 자유 모드가 된다)
+//   퀴즈 정답 양식 : answer_type 의 CHECK 를 넓힌다 (날짜 · 시간 · 금액 추가)
 
 import { GAMES } from './games.js';
 import { SCHEMA_STATEMENTS } from './schema.js';
@@ -94,6 +95,9 @@ export async function pendingMigrations(db) {
   // 퀴즈 진행 방식 (자유 · 선착순 · 제한시간) — quiz_rounds 에 컬럼 넷이 붙는다
   const quizCols = await columnsOf(db, 'quiz_rounds');
   if (quizCols.length && !quizCols.includes('mode')) pending.push('quiz_rounds.mode');
+
+  // 정답 양식 (날짜 · 시간 · 금액) — answer_type 의 CHECK 를 넓혀야 한다
+  if (quizCols.length && !(await allowsAnswerForms(db))) pending.push('quiz_rounds.answer_type');
 
   // 운영자 전용 계정이 아직 없으면 계정 정리도 남아 있는 것이다
   const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
@@ -257,6 +261,9 @@ export async function migrate(db) {
   //      이미 있던 퀴즈는 mode 기본값 'free' 를 받아 지금까지와 똑같이 굴러간다.
   //      (deadline_at 이 NULL 이면 제한시간이 없는 것이므로 자동 마감도 걸리지 않는다.)
   applied.push(...(await migrateQuizModes(db)));
+
+  // 6-3. 정답 양식 — answer_type 이 받는 값의 목록을 넓힌다
+  applied.push(...(await migrateAnswerTypes(db)));
 
   // 7. 계정 — 운영자를 admin 계정 하나로 분리한다
   applied.push(...(await migrateAccounts(db)));
@@ -422,6 +429,74 @@ async function migrateQuizModes(db) {
   await db.prepare(`UPDATE quiz_rounds SET closed_reason = 'setter' WHERE status = 'closed'`).run();
 
   return ['quiz_rounds.mode'];
+}
+
+/** quiz_rounds 가 새 정답 종류(날짜 · 시간 · 금액)를 받아 주는지 — CHECK 문구로 본다 */
+async function allowsAnswerForms(db) {
+  try {
+    const row = await db
+      .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'quiz_rounds'`)
+      .first();
+    // CHECK 가 아예 없으면 무엇이든 들어가므로 옮길 것도 없다
+    if (!row?.sql || !/answer_type[^,]*CHECK/i.test(row.sql)) return true;
+    return row.sql.includes("'date'");
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * answer_type 의 CHECK 를 넓힌다 — 'date' · 'duration' · 'money' 를 받을 수 있게.
+ *
+ * SQLite 는 CHECK 를 나중에 고칠 수 없어서 표를 다시 만들어야 하는데, quiz_rounds 를
+ * 그냥 DROP 하면 quiz_players · quiz_attempts · quiz_photos 가 ON DELETE CASCADE 로
+ * 함께 지워진다. 지난 퀴즈 기록이 통째로 날아가는 것이다.
+ *
+ * 그래서 순서를 이렇게 잡는다.
+ *   1. 네 표를 제약 없는 임시 표에 그대로 옮겨 담는다
+ *   2. 자식부터 지운다 — 부모를 가리키는 것이 없어진다
+ *   3. 부모를 지운다 (이제 딸려 지워질 자식이 없다)
+ *   4. schema.js 의 정의대로 새로 만들고 값을 되돌려 놓는다
+ *
+ * D1 은 batch 를 한 트랜잭션으로 처리하므로, 중간에 실패하면 통째로 되돌아간다.
+ */
+async function migrateAnswerTypes(db) {
+  const cols = await columnsOf(db, 'quiz_rounds');
+  if (!cols.length || (await allowsAnswerForms(db))) return [];
+
+  const TABLES = ['quiz_rounds', 'quiz_players', 'quiz_attempts', 'quiz_photos'];
+  // 표 정의는 schema.js 가 원본이다 — 여기서 다시 적지 않는다
+  const creates = TABLES.map((name) => {
+    const sql = SCHEMA_STATEMENTS.find((q) =>
+      new RegExp(`CREATE TABLE IF NOT EXISTS ${name}\\b`).test(q));
+    if (!sql) throw new Error(`${name} 정의를 찾지 못했습니다`);
+    return sql;
+  });
+  const indexes = SCHEMA_STATEMENTS.filter((q) =>
+    /CREATE INDEX/i.test(q) && /ON quiz_(players|attempts)/.test(q));
+
+  // 옮겨 담을 때는 양쪽에 다 있는 컬럼만 쓴다 (컬럼이 더 붙은 DB 도 있다)
+  const columnsByTable = Object.fromEntries(
+    await Promise.all(TABLES.map(async (t) => [t, await columnsOf(db, t)])),
+  );
+
+  await db.batch([
+    ...TABLES.map((t) => db.prepare(`CREATE TABLE _mv_${t} AS SELECT * FROM ${t}`)),
+    // 자식부터 지워야 부모를 지울 때 CASCADE 가 걸리지 않는다
+    db.prepare(`DROP TABLE quiz_photos`),
+    db.prepare(`DROP TABLE quiz_attempts`),
+    db.prepare(`DROP TABLE quiz_players`),
+    db.prepare(`DROP TABLE quiz_rounds`),
+    ...creates.map((sql) => db.prepare(sql)),
+    ...indexes.map((sql) => db.prepare(sql)),
+    ...TABLES.map((t) => {
+      const names = columnsByTable[t].join(', ');
+      return db.prepare(`INSERT INTO ${t} (${names}) SELECT ${names} FROM _mv_${t}`);
+    }),
+    ...TABLES.map((t) => db.prepare(`DROP TABLE _mv_${t}`)),
+  ]);
+
+  return ['quiz_rounds.answer_type'];
 }
 
 /**

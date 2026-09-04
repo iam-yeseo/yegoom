@@ -75,16 +75,100 @@ export const ANSWER_TYPES = {
     setterNote: '정답을 O 또는 X 중에서 골라 주세요.',
     multiple: false,
   },
+  date: {
+    key: 'date',
+    label: '날짜',
+    icon: '📅',
+    note: '년 · 월 · 일을 숫자로 채우면 돼요.',
+    setterNote: '일만 적어도 되고, 앞에서부터 비워 둘 수 있어요. (예: 3월 7일 / 7일)',
+    multiple: false,
+    form: 'date',
+  },
+  duration: {
+    key: 'duration',
+    label: '시간',
+    icon: '⏳',
+    note: '시간 · 분 · 초를 숫자로 채우면 돼요.',
+    setterNote: '초만 적어도 되고, 앞에서부터 비워 둘 수 있어요. (예: 30분 0초 / 0초)',
+    multiple: false,
+    form: 'duration',
+  },
+  money: {
+    key: 'money',
+    label: '금액',
+    icon: '💰',
+    note: '숫자만 적으면 단위는 저절로 붙어요.',
+    setterNote: '금액과 단위를 고르세요. 단위는 직접 적을 수도 있어요.',
+    multiple: false,
+    form: 'money',
+  },
 };
 
 export const ANSWER_TYPE_KEYS = Object.keys(ANSWER_TYPES);
+
+/* ---------------- 정답 양식 ---------------- */
+//
+// 날짜 · 시간 · 금액은 한 칸에 자유롭게 적는 대신, 숫자 칸 여러 개로 나눠 받는다.
+// 칸 순서는 큰 단위부터이고, 앞쪽 칸은 비워 둘 수 있다 — 비운 칸은 아예 표기되지
+// 않는다. 마지막 칸(일 · 초 · 금액)은 반드시 채워야 하고, 0 이어도 표기된다.
+//
+//   25년 3월 7일 / 3월 7일 / 7일
+//   1시간 30분 0초 / 30분 0초 / 0초        ('시간' 은 '시' 로도 쓸 수 있다)
+//   1,000원 / 500달러 / 3파운드
+//
+// 출제자가 어디까지 채웠는지가 그 문제의 '모양' 이 되고, 플레이어에게는 같은 모양의
+// 칸이 그대로 내려간다. 그래야 서로 같은 자리를 비교하게 된다. 모양은 저장해 둔
+// 정답에서 다시 읽어 내므로(answerFormOf) 컬럼을 따로 두지 않는다.
+
+/** 금액에 붙일 수 있는 단위 — 직접 적을 수도 있다 */
+export const CURRENCIES = ['원', '엔', '달러', '유로', '위안', '파운드'];
+export const DEFAULT_CURRENCY = '원';
+/** 직접 적는 단위의 길이 제한 */
+export const CURRENCY_MAX = 5;
+
+/** '시간' 자리에 쓸 수 있는 두 가지 표기 */
+export const HOUR_UNITS = ['시간', '시'];
+
+export const ANSWER_FORMS = {
+  date: {
+    key: 'date',
+    fields: [
+      { key: 'y', unit: '년', placeholder: 'yy', digits: 2 },
+      { key: 'm', unit: '월', placeholder: 'mm', digits: 2 },
+      { key: 'd', unit: '일', placeholder: 'dd', digits: 2 },
+    ],
+  },
+  duration: {
+    key: 'duration',
+    // '시간' 은 출제자가 '시' 로 바꿀 수 있다 (units)
+    fields: [
+      { key: 'h', unit: '시간', units: HOUR_UNITS, placeholder: 'hh', digits: 2 },
+      { key: 'm', unit: '분', placeholder: 'mm', digits: 2 },
+      { key: 's', unit: '초', placeholder: 'ss', digits: 2 },
+    ],
+  },
+  money: {
+    key: 'money',
+    // 단위는 칸 뒤에 붙는다 (currencies 에서 고르거나 직접 적는다)
+    fields: [{ key: 'v', unit: DEFAULT_CURRENCY, placeholder: '금액', digits: 12, grow: true }],
+    currencies: [...CURRENCIES],
+    defaultCurrency: DEFAULT_CURRENCY,
+    currencyMax: CURRENCY_MAX,
+  },
+};
+
+/** 이 종류가 숫자 칸 여러 개로 받는 양식이면 그 정의, 아니면 null */
+export function answerFormOfType(type) {
+  const key = ANSWER_TYPES[type]?.form;
+  return key ? ANSWER_FORMS[key] : null;
+}
 
 /* ---------------- 진행 방식 ---------------- */
 
 /**
  * 퀴즈가 언제 끝나는지 — 출제자가 문제를 내면서 고른다.
  *
- *   free   지금까지처럼 출제자가 '퀴즈 종료' 를 누를 때까지 계속된다
+ *   free   출제자가 '퀴즈 종료' 를 누를 때까지. 다만 첫 정답이 나오면 15분 뒤에 저절로 끝난다
  *   first  첫 정답이 나오는 순간 서버가 알아서 끝낸다 (선착순 한 명)
  *   timed  낸 시각부터 제한시간이 지나면 서버가 알아서 끝낸다
  *
@@ -96,9 +180,9 @@ export const QUIZ_MODES = {
     key: 'free',
     label: '자유',
     icon: '🎈',
-    summary: '출제자가 끝낼 때까지',
-    setterNote: '맞힌 사람이 계속 쌓여요. 언제 끝낼지는 내가 정해요.',
-    playerNote: '출제자가 끝낼 때까지 도전할 수 있어요.',
+    summary: '첫 정답 뒤 15분',
+    setterNote: '맞힌 사람이 계속 쌓여요. 첫 정답이 나오면 15분 뒤에 저절로 끝나요.',
+    playerNote: '첫 정답이 나오면 15분 동안만 더 도전할 수 있어요.',
     timed: false,
   },
   first: {
@@ -125,6 +209,14 @@ export const QUIZ_MODE_KEYS = Object.keys(QUIZ_MODES);
 
 /** 아무것도 고르지 않았을 때 (예전 DB 에 남아 있는 퀴즈도 이것으로 본다) */
 export const DEFAULT_MODE = 'free';
+
+/**
+ * 자유 모드에서 첫 정답이 나온 뒤 남겨 주는 시간 (초).
+ *
+ * 늦게 들어온 사람도 따라잡을 틈은 주되, 출제자가 잊고 끝내지 않아 퀴즈가 며칠씩
+ * 열려 있는 일은 없게 한다. 이 시간이 지나면 제한시간 문제와 똑같이 마감된다.
+ */
+export const FREE_GRACE_SECONDS = 900;
 
 /** 제한시간으로 고를 수 있는 값 (초) */
 export const TIME_LIMITS = [60, 180, 300, 600, 1800];
@@ -169,6 +261,142 @@ export function answerTypeOf(value) {
   return ANSWER_TYPE_KEYS.includes(key) ? ANSWER_TYPES[key] : null;
 }
 
+/* ---------------- 정답 양식 다루기 ---------------- */
+
+/** 칸 하나에 적힌 값 — 숫자만, 자릿수 안에서. 비었으면 null, 잘못됐으면 undefined */
+function fieldValue(raw, digits) {
+  const text = String(raw ?? '').trim();
+  if (!text) return null;
+  if (!new RegExp(`^\\d{1,${digits}}$`).test(text)) return undefined;
+  return String(Number(text));   // 앞의 0 을 떼어 낸다 ("07" -> "7")
+}
+
+/** 단위 이름표 — '시간' 처럼 고를 수 있는 칸은 고른 값을, 아니면 정해진 값을 쓴다 */
+function unitOf(field, picked) {
+  if (!field.units) return field.unit;
+  const want = String(picked ?? '').trim();
+  return field.units.includes(want) ? want : field.unit;
+}
+
+/** 1000 -> "1,000" (금액은 자릿수를 끊어 읽기 쉽게 적는다) */
+function withCommas(digitsOnly) {
+  return digitsOnly.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+/**
+ * 양식에 채운 값을 저장·표시용 한 줄로 만든다.
+ *
+ * 앞쪽 빈 칸은 통째로 빠지고, 한 번 값이 나오면 그 뒤로는 모두 채워야 한다
+ * (25년 __ 7일 처럼 가운데가 빈 답은 받지 않는다). 마지막 칸은 필수다.
+ *
+ * @param {object} parts  칸 값 ({ y, m, d } 등)
+ * @param {object} [opts] { unit: '시', currency: '달러' }
+ */
+export function formatAnswerForm(type, parts, opts = {}) {
+  const form = answerFormOfType(type);
+  if (!form) return { error: '정답 종류를 골라 주세요.' };
+  const given = parts && typeof parts === 'object' ? parts : {};
+
+  // 금액은 칸이 하나뿐이라 단위만 따로 확인하면 된다
+  if (form.key === 'money') {
+    const currency = normalizeCurrency(opts.currency);
+    if (currency.error) return currency;
+    const digits = String(given.v ?? '').trim().replace(/,/g, '');
+    if (!digits) return { error: '금액을 입력해 주세요.' };
+    if (!/^\d{1,12}$/.test(digits)) return { error: '금액은 숫자로만 적어 주세요.' };
+    return { value: `${withCommas(String(Number(digits)))}${currency.value}` };
+  }
+
+  const values = [];
+  for (const field of form.fields) {
+    const value = fieldValue(given[field.key], field.digits);
+    if (value === undefined) return { error: `${field.unit} 칸은 숫자로만 적어 주세요.` };
+    values.push(value);
+  }
+
+  const last = values.length - 1;
+  if (values[last] === null) {
+    return { error: `${form.fields[last].unit} 칸은 반드시 채워 주세요.` };
+  }
+  // 앞에서부터 비운 칸은 건너뛰고, 값이 시작된 뒤로는 빈 칸이 있으면 안 된다
+  const start = values.findIndex((v) => v !== null);
+  for (let i = start; i <= last; i += 1) {
+    if (values[i] === null) {
+      return { error: `${form.fields[i].unit} 칸도 함께 채워 주세요.` };
+    }
+  }
+
+  const text = form.fields
+    .slice(start)
+    .map((field, i) => `${values[start + i]}${unitOf(field, opts.unit)}`)
+    .join(' ');
+  return { value: text };
+}
+
+/** 직접 적은 단위까지 받아 주는 금액 단위 검사 */
+export function normalizeCurrency(input) {
+  const value = String(input ?? '').normalize('NFC').trim() || DEFAULT_CURRENCY;
+  if ([...value].length > CURRENCY_MAX) {
+    return { error: `단위는 ${CURRENCY_MAX}글자까지 쓸 수 있어요.` };
+  }
+  // 숫자·쉼표가 섞이면 금액과 단위를 다시 나눌 수 없게 된다
+  if (/[\d,\s]/.test(value)) return { error: '단위에는 숫자와 공백을 넣을 수 없어요.' };
+  return { value };
+}
+
+/**
+ * 저장해 둔 정답에서 그 문제의 '모양' 을 다시 읽어 낸다.
+ *
+ * 플레이어에게는 값이 아니라 이 모양만 내려간다 — 어떤 칸이 있는지, 단위를 무엇으로
+ * 적었는지까지만 알려 주면 같은 자리에 답을 채워 넣을 수 있다.
+ */
+export function answerFormOf(type, answerText) {
+  const form = answerFormOfType(type);
+  if (!form) return null;
+  const text = String(answerText ?? '').trim();
+
+  if (form.key === 'money') {
+    const currency = text.replace(/^[\d,]+\s*/, '').trim() || DEFAULT_CURRENCY;
+    return { key: 'money', fields: [{ ...form.fields[0], unit: currency }], currency };
+  }
+
+  // 뒤에서부터 몇 칸이 쓰였는지 센다 (앞쪽 칸만 빠질 수 있다)
+  const unit = form.key === 'duration'
+    ? (HOUR_UNITS.find((u) => new RegExp(`\\d\\s*${u}(\\s|$)`).test(text)) ?? form.fields[0].unit)
+    : null;
+  const used = form.fields.filter((field) => {
+    const names = field.units ? field.units : [field.unit];
+    return names.some((n) => new RegExp(`\\d\\s*${n}(\\s|$)`).test(text));
+  });
+  const fields = (used.length ? form.fields.slice(form.fields.length - used.length) : form.fields)
+    .map((field) => ({ ...field, unit: unitOf(field, unit) }));
+  return { key: form.key, fields, unit: unit ?? undefined };
+}
+
+/** 양식으로 받은 답을 비교용 값으로 (단위 표기는 무시하고 숫자만 본다) */
+function formCompareKey(type, text) {
+  const form = answerFormOfType(type);
+  if (!form) return null;
+  const raw = String(text ?? '').trim();
+  if (!raw) return null;
+
+  if (form.key === 'money') {
+    const digits = raw.replace(/[^\d]/g, '');
+    return digits ? String(Number(digits)) : null;
+  }
+  // "3월 7일" -> { m: 3, d: 7 } — 단위 이름으로 자리를 찾는다
+  const found = {};
+  for (const field of form.fields) {
+    for (const name of field.units ?? [field.unit]) {
+      const m = raw.match(new RegExp(`(\\d+)\\s*${name}(\\s|$)`));
+      if (m) found[field.key] = String(Number(m[1]));
+    }
+  }
+  const keys = form.fields.map((f) => f.key);
+  if (found[keys[keys.length - 1]] === undefined) return null;
+  return keys.map((k) => found[k] ?? '').join('|');
+}
+
 /* ---------------- 입력값 다듬기 ---------------- */
 
 /** 문제 본문 — 비어 있으면 안 되고 너무 길어도 안 된다 */
@@ -194,9 +422,12 @@ export function normalizeHint(input) {
  * 숫자·텍스트는 쉼표로 여러 개를 받을 수 있고, OX 는 하나만 받는다.
  * 저장은 적어 낸 그대로 하고(공개할 때 그 모양으로 보여 준다), 채점할 때 다시 쪼갠다.
  */
-export function normalizeAnswerText(type, input) {
+export function normalizeAnswerText(type, input, opts = {}) {
   const answerType = answerTypeOf(type);
   if (!answerType) return { error: '정답 종류를 골라 주세요.' };
+
+  // 날짜 · 시간 · 금액은 칸 여러 개로 들어오므로 쉼표로 쪼개지 않는다
+  if (answerType.form) return formatAnswerForm(answerType.key, input, opts);
 
   const raw = String(input ?? '').normalize('NFC').trim();
   if (!raw) return { error: '정답을 입력해 주세요.' };
@@ -222,8 +453,26 @@ export function normalizeAnswerText(type, input) {
   return { value: parts.join(', ') };
 }
 
-/** 플레이어가 낸 답 — 길이만 확인하고, 맞았는지는 isCorrectAnswer 가 본다 */
-export function normalizeSubmission(input) {
+/**
+ * 플레이어가 낸 답 — 길이만 확인하고, 맞았는지는 isCorrectAnswer 가 본다.
+ *
+ * 양식으로 받는 종류(날짜 · 시간 · 금액)는 칸 값이 통째로 들어오므로, 출제자가
+ * 정해 둔 모양(form)에 맞춰 같은 한 줄로 만들어 둔다. 그래야 같은 자리끼리 비교된다.
+ */
+export function normalizeSubmission(input, { type, form } = {}) {
+  if (answerFormOfType(type)) {
+    const opts = form?.key === 'money'
+      ? { currency: form.currency }
+      : { unit: form?.unit };
+    // 출제자가 쓰지 않은 칸에 답을 채워 넣어도 무시한다
+    const allowed = new Set((form?.fields ?? []).map((f) => f.key));
+    const parts = Object.fromEntries(
+      Object.entries(input && typeof input === 'object' ? input : {})
+        .filter(([k]) => !allowed.size || allowed.has(k)),
+    );
+    return formatAnswerForm(type, parts, opts);
+  }
+
   const value = String(input ?? '').normalize('NFC').trim();
   if (!value) return { error: '정답을 입력해 주세요.' };
   if (value.length > ANSWER_MAX) return { error: `정답은 ${ANSWER_MAX}자까지 쓸 수 있어요.` };
@@ -250,6 +499,9 @@ export function compareKey(type, value) {
   const text = String(value ?? '').normalize('NFC').trim();
   if (!text) return null;
 
+  // 양식으로 받는 종류는 단위 표기를 빼고 칸의 숫자만 본다
+  if (answerFormOfType(type)) return formCompareKey(type, text);
+
   if (type === 'number') {
     if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(text)) return null;
     const n = Number(text);
@@ -268,6 +520,8 @@ export function compareKey(type, value) {
 export function isCorrectAnswer(type, stored, submitted) {
   const given = compareKey(type, submitted);
   if (given === null) return false;
+  // 양식으로 받는 종류는 쉼표가 값의 일부일 수 있어(1,000원) 쪼개지 않는다
+  if (answerFormOfType(type)) return compareKey(type, stored) === given;
   return splitAnswers(stored).some((one) => compareKey(type, one) === given);
 }
 
@@ -487,6 +741,10 @@ export function quizInfo() {
   return {
     ...QUIZ,
     answerTypes: ANSWER_TYPE_KEYS.map((key) => ({ ...ANSWER_TYPES[key] })),
+    // 날짜 · 시간 · 금액의 칸 구성 — 출제 폼이 이걸 읽어 칸을 만든다
+    answerForms: Object.fromEntries(
+      Object.entries(ANSWER_FORMS).map(([key, form]) => [key, JSON.parse(JSON.stringify(form))]),
+    ),
     modes: QUIZ_MODE_KEYS.map((key) => ({ ...QUIZ_MODES[key] })),
     defaultMode: DEFAULT_MODE,
     // 화면은 초 단위를 직접 다루지 않고 여기 이름표를 그대로 쓴다

@@ -13,10 +13,10 @@
 
 import { fail, json, personOf, readJson, requireUser } from '../lib/util.js';
 import {
-  ANSWER_TYPES, DEFAULT_MODE, DEFAULT_TIME_LIMIT, MAX_HINTS, answerTypeOf, closedCount,
-  formatDuration, getQuizTurn, hintsOf, latestQuiz, modeOf, nextHintPenalty, normalizeAnswerText,
-  normalizeHint, normalizeQuestion, normalizeTimeLimit, openQuiz, personById, quizInfo, quizModeOf,
-  quizPhotoUrl, quizPlayerRows, roundNumberFor, scoreFor, settleExpiredQuiz,
+  ANSWER_TYPES, DEFAULT_MODE, DEFAULT_TIME_LIMIT, MAX_HINTS, answerFormOf, answerTypeOf,
+  closedCount, formatDuration, getQuizTurn, hintsOf, latestQuiz, modeOf, nextHintPenalty,
+  normalizeAnswerText, normalizeHint, normalizeQuestion, normalizeTimeLimit, openQuiz, personById,
+  quizInfo, quizModeOf, quizPhotoUrl, quizPlayerRows, roundNumberFor, scoreFor, settleExpiredQuiz,
 } from '../lib/quiz.js';
 import { normalizeQuizPhoto } from '../lib/image.js';
 
@@ -143,6 +143,9 @@ export async function onRequestGet(context) {
       answerType: quiz.answer_type,
       answerTypeLabel: ANSWER_TYPES[quiz.answer_type]?.label ?? quiz.answer_type,
       answerTypeNote: ANSWER_TYPES[quiz.answer_type]?.note ?? '',
+      // 날짜 · 시간 · 금액은 '어떤 칸이 있는지' 만 알려 준다. 값은 여기 담기지 않으므로
+      // 진행 중에도 안전하게 내려갈 수 있고, 플레이어는 같은 자리에 답을 채워 넣는다.
+      answerForm: answerFormOf(quiz.answer_type, quiz.answer_text),
       mode: mode.key,
       modeLabel: mode.label,
       modeIcon: mode.icon,
@@ -223,7 +226,11 @@ export async function onRequestPost(context) {
   const question = normalizeQuestion(body.question);
   if (question.error) return fail(400, question.error);
 
-  const answer = normalizeAnswerText(answerType.key, body.answer);
+  // 양식으로 받는 종류는 칸 값이 통째로 오고, 표기 옵션(시간 단위 · 금액 단위)이 함께 온다
+  const answer = normalizeAnswerText(answerType.key, body.answer, {
+    unit: body.hourUnit,
+    currency: body.currency,
+  });
   if (answer.error) return fail(400, answer.error);
 
   // 진행 방식 — 아무것도 보내지 않은 예전 화면은 지금까지처럼 자유 모드가 된다
@@ -295,6 +302,7 @@ export async function onRequestPost(context) {
     quizId,
     roundNo: await roundNumberFor(db, { status: 'open' }),
     answerType: answerType.key,
+    answerForm: answerFormOf(answerType.key, answer.value),
     mode: mode.key,
     modeLabel: mode.label,
     timeLimit,

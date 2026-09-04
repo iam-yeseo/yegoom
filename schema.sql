@@ -109,7 +109,9 @@ CREATE TABLE IF NOT EXISTS quiz_rounds (
      id             INTEGER PRIMARY KEY AUTOINCREMENT,
      round_no       INTEGER,
      setter_user_id INTEGER REFERENCES users(id),
-     answer_type    TEXT    NOT NULL CHECK (answer_type IN ('number', 'text', 'ox')),
+     answer_type    TEXT    NOT NULL
+                            CHECK (answer_type IN ('number', 'text', 'ox',
+                                                   'date', 'duration', 'money')),
      mode           TEXT    NOT NULL DEFAULT 'free'
                             CHECK (mode IN ('free', 'first', 'timed')),
      time_limit_sec INTEGER,

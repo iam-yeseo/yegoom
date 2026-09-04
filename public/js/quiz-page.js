@@ -102,6 +102,8 @@ document.querySelector('[data-app]').innerHTML = `
       <button class="ox-btn" type="button" data-ox="O" aria-pressed="false">O</button>
       <button class="ox-btn" type="button" data-ox="X" aria-pressed="false">X</button>
     </div>
+    <!-- 날짜 · 시간 · 금액은 숫자 칸 여러 개로 받는다 -->
+    <div class="answer-form hidden" id="play-form"></div>
 
     <button id="play-submit" class="btn" type="button" style="margin-top: 12px">정답 제출</button>
     <div id="play-log"></div>
@@ -142,7 +144,8 @@ document.querySelector('[data-app]').innerHTML = `
     <p class="muted" id="mode-note" style="font-size: 13px; margin: 8px 0 16px"></p>
 
     <div class="card__label">정답 종류</div>
-    <div class="segmented" role="tablist" aria-label="정답 종류" id="type-pick"></div>
+    <!-- 여섯 개라 한 줄에 다 들어가지 않는다 — 격자로 두 줄에 나눠 담는다 -->
+    <div class="segmented segmented--grid" role="tablist" aria-label="정답 종류" id="type-pick"></div>
     <p class="muted" id="type-note" style="font-size: 13px; margin: -6px 0 14px"></p>
 
     <label class="field">
@@ -168,6 +171,14 @@ document.querySelector('[data-app]').innerHTML = `
       <button class="ox-btn" type="button" data-ox="O" aria-pressed="false">O</button>
       <button class="ox-btn" type="button" data-ox="X" aria-pressed="false">X</button>
     </div>
+    <!-- 날짜 · 시간 · 금액 — 칸과 함께 표기 고르기가 붙는다 -->
+    <div class="answer-form hidden" id="c-form"></div>
+    <div class="chips chips--unit hidden" id="c-unit-pick"></div>
+    <label class="field hidden" id="c-currency-field">
+      <span>단위 직접 적기 (5글자까지)</span>
+      <input id="c-currency" type="text" maxlength="5" autocomplete="off" placeholder="예: 스위스프랑" />
+    </label>
+    <p class="muted hidden" id="c-form-note" style="font-size: 13px; margin: -4px 0 14px"></p>
 
     <div class="card__label" style="margin-top: 4px">힌트 (선택)</div>
     <p class="muted" style="font-size: 13px; margin: 0 0 12px" id="c-hint-note"></p>
@@ -214,12 +225,13 @@ const el = Object.fromEntries(
     'question-timer', 'question-timer-label', 'question-timer-value',
     'answer-box', 'answer-text', 'answer-note',
     'play-box', 'play-score', 'play-score-note', 'play-input-wrap', 'play-answer', 'play-ox',
-    'play-submit', 'play-log',
+    'play-form', 'play-submit', 'play-log',
     'hint-box', 'hint-list', 'hint-open', 'hint-note',
     'setter-box', 'setter-answer', 'setter-hints', 'close-quiz', 'drop-quiz', 'setter-note',
     'compose-box', 'mode-pick', 'mode-note', 'time-pick',
     'type-pick', 'type-note', 'c-question', 'c-photo-preview', 'c-photo-pick',
     'c-photo-clear', 'c-photo-file', 'c-answer-field', 'c-answer', 'c-ox', 'c-hint-note',
+    'c-form', 'c-unit-pick', 'c-currency-field', 'c-currency', 'c-form-note',
     'c-hint1-label', 'c-hint2-label', 'c-hint3-label', 'c-hint1', 'c-hint2', 'c-hint3', 'c-submit',
     'pass-box', 'pass-list',
     'players', 'players-label', 'rules', 'rules-note',
@@ -236,8 +248,15 @@ renderTabbar(user);
 
 /** 마지막으로 받아 온 상태 */
 let current = null;
-/** 출제 폼에서 고른 정답 종류 · 진행 방식 · 제한시간 · 사진 (화면을 다시 그려도 유지된다) */
+/** 금액 단위를 직접 적겠다는 표시 */
+const CUSTOM_CURRENCY = '직접 적기';
+
+/** 출제 폼에서 고른 정답 종류 · 진행 방식 · 제한시간 · 표기 · 사진 (화면을 다시 그려도 유지된다) */
 let composeType = 'text';
+/** 시간 양식의 '시간' 자리를 어떻게 적을지 */
+let composeHourUnit = '시간';
+/** 금액 양식의 단위 (CUSTOM_CURRENCY 면 직접 적는다) */
+let composeCurrencyPick = '원';
 let composeMode = 'free';
 let composeTimeLimit = null;
 let composePhoto = null;
@@ -263,17 +282,111 @@ async function run(button, busyText, work) {
 
 /* ---------------- 정답 입력칸 ---------------- */
 
-/** OX 문제는 버튼 두 개로, 나머지는 입력칸으로 받는다. */
-function setupAnswerInput({ type, input, wrap, ox, placeholder }) {
+/**
+ * 정답을 받는 방법은 셋 중 하나다.
+ *   OX          버튼 두 개
+ *   날짜·시간·금액  숫자 칸 여러 개 (양식)
+ *   그 밖         입력칸 하나
+ * 셋은 서로 자리를 바꾸므로, 지금 쓰는 것만 남기고 나머지는 숨긴다.
+ */
+function setupAnswerInput({ type, input, wrap, ox, form, formSpec, placeholder }) {
   const isOx = type === 'ox';
-  // 정답 종류를 바꾸면 입력칸과 OX 버튼이 서로 자리를 바꾼다 — 바뀔 때만 움직인다
-  setHidden(wrap, isOx);
+  const isForm = !!formSpec;
+
+  setHidden(wrap, isOx || isForm);
   setHidden(ox, !isOx);
+  if (form) setHidden(form, !isForm);
+
+  if (isForm) {
+    renderAnswerForm(form, formSpec);
+    return;
+  }
   if (isOx) return;
 
   input.placeholder = placeholder ?? '정답 입력';
   // 숫자 문제는 숫자 키패드를 먼저 띄운다 (음수·소수도 칠 수 있어야 해서 text 로 둔다)
   input.inputMode = type === 'number' ? 'decimal' : 'text';
+}
+
+/* ---------------- 정답 양식 (날짜 · 시간 · 금액) ---------------- */
+
+/**
+ * 숫자 칸 여러 개를 그린다. 칸마다 뒤에 단위 이름표가 붙는다 ("dd" + "일").
+ *
+ * 이미 같은 모양이 그려져 있으면 손대지 않는다 — 15초마다 화면을 다시 그리는데
+ * 그때마다 칸을 갈아 끼우면 쓰던 값이 날아간다.
+ */
+function renderAnswerForm(box, spec) {
+  const shape = JSON.stringify(spec.fields.map((f) => [f.key, f.unit, f.placeholder]));
+  if (box.dataset.shape === shape) return;
+  box.dataset.shape = shape;
+
+  setHtml(box, spec.fields
+    .map(
+      (f) => `<span class="answer-form__slot${f.grow ? ' answer-form__slot--grow' : ''}">
+        <input class="answer-form__field" type="text" inputmode="numeric" autocomplete="off"
+               maxlength="${f.digits}" placeholder="${escapeHtml(f.placeholder)}"
+               aria-label="${escapeHtml(f.placeholder + f.unit)}" data-part="${f.key}" />
+        <span class="answer-form__unit">${escapeHtml(f.unit)}</span>
+      </span>`,
+    )
+    .join(''));
+}
+
+/** 양식 칸에 채워진 값 — { d: '7' } 처럼 자리별로 모은다 */
+function formValues(box) {
+  return Object.fromEntries(
+    [...box.querySelectorAll('[data-part]')].map((i) => [i.dataset.part, i.value.trim()]),
+  );
+}
+
+/**
+ * 확인 창에 보여 줄 한 줄 — 앞의 빈 칸은 빼고 이어 붙인다.
+ * 서버가 저장할 모양과 같은 규칙이다 (src/lib/quiz.js 의 formatAnswerForm).
+ * 여기서 틀려도 저장은 서버가 다시 하므로, 눈으로 확인하는 용도다.
+ */
+function previewForm(spec, values) {
+  if (spec.key === 'money') {
+    const digits = String(values.v ?? '').replace(/\D/g, '');
+    const money = digits ? String(Number(digits)).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+    return `${money}${spec.fields[0].unit}`;
+  }
+  const start = spec.fields.findIndex((f) => String(values[f.key] ?? '').trim());
+  if (start < 0) return '';
+  return spec.fields
+    .slice(start)
+    .map((f) => `${Number(values[f.key] ?? 0)}${f.unit}`)
+    .join(' ');
+}
+
+/** 양식 칸을 모두 비운다 (답을 낸 뒤) */
+function clearForm(box) {
+  for (const i of box.querySelectorAll('[data-part]')) i.value = '';
+}
+
+/** 마지막 칸 말고는 비워 둘 수 있으므로, 하나라도 채웠는지만 본다 */
+function formFilled(box) {
+  return [...box.querySelectorAll('[data-part]')].some((i) => i.value.trim());
+}
+
+// 숫자 칸에는 숫자만 남기고, 다 채우면 다음 칸으로 넘어간다
+for (const box of [el.playForm, el.cForm]) {
+  box.addEventListener('input', (e) => {
+    const field = e.target.closest('[data-part]');
+    if (!field) return;
+    const cleaned = field.value.replace(/[^\d]/g, '');
+    if (cleaned !== field.value) field.value = cleaned;
+    if (cleaned.length >= Number(field.maxLength) && field.maxLength > 0) {
+      const all = [...box.querySelectorAll('[data-part]')];
+      all[all.indexOf(field) + 1]?.focus();
+    }
+  });
+  // 엔터로 바로 제출 (칸이 여러 개라도 마지막까지 가지 않아도 되게)
+  box.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (box === el.playForm) el.playSubmit.click();
+    if (box === el.cForm) el.cSubmit.click();
+  });
 }
 
 /** OX 버튼 묶음에서 지금 고른 값 */
@@ -365,14 +478,86 @@ function renderComposeType() {
     btn.setAttribute('aria-selected', String(btn.dataset.type === composeType));
   }
   el.typeNote.textContent = picked?.setterNote ?? '';
+
   setupAnswerInput({
     type: composeType,
     input: el.cAnswer,
     wrap: el.cAnswerField,
     ox: el.cOx,
+    form: el.cForm,
+    formSpec: composeFormSpec(),
     placeholder: picked?.placeholder,
   });
+  renderComposeUnits();
 }
+
+/**
+ * 출제자가 지금 보는 양식 — 고른 표기(시간 단위 · 금액 단위)를 입혀서 돌려준다.
+ * 양식이 아닌 종류면 null (그때는 입력칸 하나나 OX 버튼을 쓴다).
+ */
+function composeFormSpec() {
+  const base = current?.game?.answerForms?.[current?.game?.answerTypes
+    ?.find((t) => t.key === composeType)?.form];
+  if (!base) return null;
+
+  if (base.key === 'money') {
+    return { ...base, fields: [{ ...base.fields[0], unit: composeCurrency() }] };
+  }
+  return {
+    ...base,
+    fields: base.fields.map((f) => (f.units ? { ...f, unit: composeHourUnit } : { ...f })),
+  };
+}
+
+/** 금액 단위 — 목록에서 고른 것, '직접' 이면 적어 넣은 값 */
+function composeCurrency() {
+  const custom = el.cCurrency.value.trim();
+  if (composeCurrencyPick === CUSTOM_CURRENCY) return custom || '단위';
+  return composeCurrencyPick;
+}
+
+/** 표기 고르기 줄 — 시간은 '시간/시', 금액은 단위 목록 */
+function renderComposeUnits() {
+  const spec = composeFormSpec();
+  const money = spec?.key === 'money';
+  const duration = spec?.key === 'duration';
+
+  setHidden(el.cUnitPick, !spec || (!money && !duration));
+  setHidden(el.cCurrencyField, !(money && composeCurrencyPick === CUSTOM_CURRENCY));
+  setHidden(el.cFormNote, !spec);
+
+  if (duration) {
+    const units = current.game.answerForms.duration.fields[0].units ?? [];
+    setHtml(el.cUnitPick, units
+      .map((u) => `<button class="chip" type="button" data-unit="${escapeHtml(u)}"
+                           aria-pressed="${u === composeHourUnit}">${escapeHtml(u)}</button>`)
+      .join(''));
+    el.cFormNote.textContent = `앞 칸을 비우면 그 단위는 표기되지 않아요. 지금은 '${composeHourUnit}' 으로 적혀요.`;
+  } else if (money) {
+    const list = [...(current.game.answerForms.money.currencies ?? []), CUSTOM_CURRENCY];
+    setHtml(el.cUnitPick, list
+      .map((c) => `<button class="chip" type="button" data-unit="${escapeHtml(c)}"
+                           aria-pressed="${c === composeCurrencyPick}">${escapeHtml(c)}</button>`)
+      .join(''));
+    el.cFormNote.textContent = `금액 뒤에 '${composeCurrency()}' 이 붙어요.`;
+  } else if (spec) {
+    el.cFormNote.textContent = '앞 칸을 비우면 그 단위는 표기되지 않아요. 마지막 칸은 0이어도 표기돼요.';
+  }
+}
+
+// 표기를 고르면 칸 뒤의 이름표가 바로 바뀐다
+el.cUnitPick.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-unit]');
+  if (!btn) return;
+  const value = btn.dataset.unit;
+  if (composeFormSpec()?.key === 'money') composeCurrencyPick = value;
+  else composeHourUnit = value;
+  playOnce(btn, 'is-picked');
+  renderComposeType();
+  if (composeCurrencyPick === CUSTOM_CURRENCY) el.cCurrency.focus();
+});
+
+el.cCurrency.addEventListener('input', () => renderComposeType());
 
 el.cPhotoPick.addEventListener('click', () => el.cPhotoFile.click());
 
@@ -403,9 +588,15 @@ function renderComposePhoto() {
 
 el.cSubmit.addEventListener('click', async () => {
   const question = el.cQuestion.value.trim();
-  const answer = composeType === 'ox' ? oxValue(el.cOx) : el.cAnswer.value.trim();
+  const formSpec = composeFormSpec();
+  // 양식 문제는 칸 값을 통째로 보낸다 (한 줄로 만드는 일은 서버가 한다)
+  const answer = formSpec
+    ? formValues(el.cForm)
+    : composeType === 'ox' ? oxValue(el.cOx) : el.cAnswer.value.trim();
   if (!question) return showToast('문제를 입력해 주세요.', 'error');
-  if (!answer) return showToast('정답을 입력해 주세요.', 'error');
+  if (formSpec ? !formFilled(el.cForm) : !answer) {
+    return showToast('정답을 입력해 주세요.', 'error');
+  }
 
   const mode = (current?.game?.modes ?? []).find((m) => m.key === composeMode);
   const limitLabel = timeLimitLabel();
@@ -422,7 +613,7 @@ el.cSubmit.addEventListener('click', async () => {
       }`,
       mode?.setterNote ?? '',
     ].filter(Boolean).join('\n'),
-    detail: `정답: ${answer}`,
+    detail: `정답: ${formSpec ? previewForm(formSpec, formValues(el.cForm)) : answer}`,
     confirmText: '문제 내기',
   });
   if (!ok) return;
@@ -434,6 +625,8 @@ el.cSubmit.addEventListener('click', async () => {
         answerType: composeType,
         mode: composeMode,
         timeLimit: composeTimeLimit,
+        hourUnit: composeHourUnit,
+        currency: composeCurrency(),
         question,
         answer,
         hints,
@@ -442,6 +635,7 @@ el.cSubmit.addEventListener('click', async () => {
     });
     el.cQuestion.value = '';
     el.cAnswer.value = '';
+    clearForm(el.cForm);
     el.cHint1.value = '';
     el.cHint2.value = '';
     el.cHint3.value = '';
@@ -459,13 +653,19 @@ el.cSubmit.addEventListener('click', async () => {
 /* ---------------- 정답 제출 · 힌트 · 종료 ---------------- */
 
 el.playSubmit.addEventListener('click', () => {
-  const type = current?.quiz?.answerType;
-  const answer = type === 'ox' ? oxValue(el.playOx) : el.playAnswer.value.trim();
-  if (!answer) return showToast('정답을 입력해 주세요.', 'error');
+  const quiz = current?.quiz;
+  const form = quiz?.answerForm;
+  const answer = form
+    ? formValues(el.playForm)
+    : quiz?.answerType === 'ox' ? oxValue(el.playOx) : el.playAnswer.value.trim();
+  if (form ? !formFilled(el.playForm) : !answer) {
+    return showToast('정답을 입력해 주세요.', 'error');
+  }
 
   return run(el.playSubmit, '제출 중…', async () => {
     const res = await api('/api/quiz/answer', { method: 'POST', body: { answer } });
     el.playAnswer.value = '';
+    clearForm(el.playForm);
     for (const b of el.playOx.querySelectorAll('[data-ox]')) b.setAttribute('aria-pressed', 'false');
 
     if (!res.correct) {
@@ -653,7 +853,10 @@ function renderQuestion(state) {
 function closedReasonNote(quiz) {
   if (quiz.closedReason === 'first') return '가장 먼저 맞힌 사람이 나와서 끝났어요.';
   if (quiz.closedReason === 'timeup') {
-    return `제한시간 ${quiz.timeLimitLabel ?? ''}이 끝나 자동으로 마감됐어요.`.replace('  ', ' ');
+    // 자유 문제는 제한시간이 아니라 '첫 정답 뒤 15분' 이 끝난 것이다
+    return quiz.mode === 'free'
+      ? '첫 정답이 나오고 15분이 지나 자동으로 마감됐어요.'
+      : `제한시간 ${quiz.timeLimitLabel ?? ''}이 끝나 자동으로 마감됐어요.`.replace('  ', ' ');
   }
   return '출제자가 끝냈어요.';
 }
@@ -689,7 +892,8 @@ function clockText(seconds) {
  */
 function renderTimer(state) {
   const { quiz } = state;
-  const on = !!quiz && !quiz.closed && quiz.mode === 'timed' && quiz.secondsLeft !== null;
+  // 제한시간 문제뿐 아니라, 첫 정답이 나온 자유 문제도 마감 시각이 생긴다
+  const on = !!quiz && !quiz.closed && quiz.secondsLeft !== null;
   setHidden(el.questionTimer, !on);
 
   if (!on) {
@@ -698,7 +902,7 @@ function renderTimer(state) {
   }
   deadlineAt = Date.now() + quiz.secondsLeft * 1000;
   timeupAsked = false;
-  el.questionTimerLabel.textContent = '남은 시간';
+  el.questionTimerLabel.textContent = quiz.mode === 'free' ? '마감까지' : '남은 시간';
   tickTimer();
 }
 
@@ -757,12 +961,13 @@ function renderPlay(state) {
   const done = me.solved;
   setHidden(el.playInputWrap, done);
   setHidden(el.playOx, done);
+  setHidden(el.playForm, done);
   setHidden(el.playSubmit, done);
   if (done) {
     el.playScore.textContent = `${me.rank}번째로 맞혔어요 · +${me.score}점`;
     el.playScoreNote.textContent = me.rank === 1
       ? '가장 먼저 맞혔어요! 이 퀴즈가 끝나면 다음 출제자가 돼요.'
-      : quiz.mode === 'timed'
+      : quiz.mode === 'timed' || quiz.secondsLeft !== null
         ? '제한시간이 끝나면 정답이 공개돼요.'
         : '출제자가 퀴즈를 끝내면 정답이 공개돼요.';
     setHtml(el.playLog, '');
@@ -774,6 +979,9 @@ function renderPlay(state) {
     input: el.playAnswer,
     wrap: el.playInputWrap,
     ox: el.playOx,
+    form: el.playForm,
+    // 출제자가 쓴 칸만 그대로 내려온다 (값은 오지 않는다)
+    formSpec: quiz.answerForm,
   });
 
   el.playScore.textContent = `지금 맞히면 ${me.potentialScore}점`;
@@ -866,7 +1074,9 @@ function renderSetter(state) {
     ? '가장 먼저 맞힌 사람이 나오면 저절로 끝나요.'
     : quiz.mode === 'timed'
       ? `제한시간 ${quiz.timeLimitLabel ?? ''}이 지나면 저절로 끝나요.`.replace('  ', ' ')
-      : '';
+      : quiz.solvedCount
+        ? '첫 정답이 나와서 15분 뒤에 저절로 끝나요.'
+        : '첫 정답이 나오면 그때부터 15분 뒤에 저절로 끝나요.';
   const solvedNote = quiz.solvedCount
     ? `${quiz.solvedCount}명이 맞혔어요. 끝내면 가장 먼저 맞힌 사람이 다음 출제자가 돼요.`
     : '아직 맞힌 사람이 없어요. 지금 끝내면 출제 차례가 나에게 그대로 남아요.';

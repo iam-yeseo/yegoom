@@ -1476,3 +1476,99 @@ textarea:focus {
     border-radius: var(--radius) var(--radius) 0 0;
   }
 }
+
+/* 고를 게 넷을 넘으면 알약 한 줄에 다 들어가지 않는다 (정답 종류 여섯 개).
+   그때는 격자로 바꿔 두 줄에 나눠 담는다 — 이름표가 줄바꿈되지 않게. */
+.segmented--grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-radius: var(--radius-sm);
+}
+
+.segmented--grid .segmented__item {
+  border-radius: calc(var(--radius-sm) - 3px);
+  padding: 10px 2px;
+}
+
+/* 좁은 화면에서는 '타임어택' 같은 네 글자가 한 줄에 들어가지 않아 두 줄로 깨진다.
+   글자를 한 단계 줄이고 좌우 여백을 좁혀 한 줄에 담는다. */
+@media (max-width: 360px) {
+  .segmented__item { font-size: 11px; padding-left: 2px; padding-right: 2px; }
+}
+
+/* ---------- 정답 양식 (날짜 · 시간 · 금액) ---------- */
+
+/* 숫자 칸 여러 개를 한 줄에 늘어놓고, 칸마다 뒤에 단위 이름표를 붙인다.
+   "yy 년  mm 월  dd 일" 처럼 읽히게 칸과 이름표를 한 덩어리로 묶는다. */
+.answer-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.answer-form__slot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+/* 금액은 칸이 하나뿐이라 줄을 다 쓴다 */
+.answer-form__slot--grow { flex: 1 1 100%; }
+
+.answer-form__slot:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(255, 144, 87, 0.18);
+}
+
+.answer-form__field {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  font-size: 20px;      /* 16px 아래로 내려가면 iOS 가 화면을 확대해 버린다 */
+  font-weight: 800;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--text);
+  background: none;
+  border: none;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.answer-form__field::placeholder { color: var(--muted); opacity: 0.45; font-weight: 700; }
+.answer-form__field:focus { box-shadow: none; }
+
+/* 금액 칸은 자릿수가 길어 왼쪽 정렬이 읽기 좋다 */
+.answer-form__slot--grow .answer-form__field { text-align: left; }
+
+.answer-form__unit {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 표기 고르기 (시간 단위 · 금액 단위) — 칸 수가 들쭉날쭉해서 자동으로 채운다 */
+.chips--unit {
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  margin: 0 0 12px;
+}
+
+.chips--unit .chip { padding: 9px 6px; font-size: 13px; }
+
+@media (max-width: 360px) {
+  .answer-form__field { font-size: 18px; }
+  .answer-form__slot { padding: 9px 10px; }
+}
