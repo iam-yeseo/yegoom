@@ -10,11 +10,21 @@
 //
 // 정답과 힌트는 서버가 볼 수 있는 사람에게만 내려 준다. 화면에서 가리는 게 아니라
 // 아예 오지 않으므로, 개발자 도구를 열어도 남의 힌트는 보이지 않는다.
+//
+// 퀴즈가 언제 끝나는지는 출제자가 문제를 내면서 고른다 (진행 방식).
+//   🎈 자유       출제자가 끝낼 때까지
+//   ⚡ 선착순 1명  첫 정답이 나오면 그 자리에서
+//   ⏱️ 제한시간    정해 둔 시간이 지나면 자동으로
+// 뒤 둘은 서버가 알아서 끝내므로, 화면은 남은 시간을 세어 보여 주기만 한다.
+//
+// 눌러서 벌어진 일은 화면 아래 토스트로 알린다. 화면 맨 위에 붙는 안내문은
+// 스크롤을 조금만 내려도 보이지 않아서, 답을 낸 결과를 놓치기 쉬웠다.
 
 import {
   QUIZ, api, avatarOf, escapeHtml, personChip, renderTabbar, requireLogin, roundLabel,
-  showMessage, startClock,
+  startClock,
 } from '/js/common.js';
+import { confirmDialog, showToast } from '/js/ui.js';
 import { shrinkPhoto } from '/js/photo-picker.js';
 
 document.title = QUIZ.label;
@@ -35,8 +45,6 @@ document.querySelector('[data-app]').innerHTML = `
     <span id="subtitle">불러오는 중…</span>
   </h1>
 
-  <p id="msg" class="msg hidden" role="status"></p>
-
   <!-- 지금 누가 문제를 낼 차례인지 -->
   <section id="turn-box" class="card hidden">
     <div class="card__label">출제 차례</div>
@@ -52,12 +60,21 @@ document.querySelector('[data-app]').innerHTML = `
   <!-- 문제 카드 (진행 중 · 끝난 뒤 모두) -->
   <section id="question-box" class="card hidden">
     <div class="card__label" id="question-label">문제</div>
+
+    <!-- 제한시간이 걸린 문제에만 나온다 -->
+    <div class="quiz-timer hidden" id="question-timer">
+      <span class="quiz-timer__label" id="question-timer-label">남은 시간</span>
+      <span class="quiz-timer__value" id="question-timer-value">--:--</span>
+    </div>
+
     <img id="question-photo" class="quiz-photo hidden" alt="문제에 붙은 사진" />
     <p class="quiz-question" id="question-text"></p>
     <div class="quiz-meta">
+      <span class="tag tag--mode" id="question-mode"></span>
       <span class="tag" id="question-type"></span>
       <span class="muted" id="question-note"></span>
     </div>
+    <p class="muted" id="question-mode-note" style="font-size: 13px; margin: 8px 0 0"></p>
   </section>
 
   <!-- 정답 공개 (퀴즈가 끝난 뒤) -->
@@ -115,6 +132,12 @@ document.querySelector('[data-app]').innerHTML = `
   <section id="compose-box" class="card hidden">
     <div class="card__label">문제 내기</div>
 
+    <div class="card__label" style="margin-top: 2px">진행 방식</div>
+    <div class="segmented" role="tablist" aria-label="진행 방식" id="mode-pick"></div>
+    <div class="chips chips--time hidden" id="time-pick"></div>
+    <p class="muted" id="mode-note" style="font-size: 13px; margin: 8px 0 16px"></p>
+
+    <div class="card__label">정답 종류</div>
     <div class="segmented" role="tablist" aria-label="정답 종류" id="type-pick"></div>
     <p class="muted" id="type-note" style="font-size: 13px; margin: -6px 0 14px"></p>
 
@@ -180,16 +203,18 @@ document.querySelector('[data-app]').innerHTML = `
 
 const el = Object.fromEntries(
   [
-    'round-badge', 'round-note', 'subtitle', 'msg',
+    'round-badge', 'round-note', 'subtitle',
     'turn-box', 'turn-avatar', 'turn-name', 'turn-note',
     'question-box', 'question-label', 'question-photo', 'question-text', 'question-type',
-    'question-note',
+    'question-note', 'question-mode', 'question-mode-note',
+    'question-timer', 'question-timer-label', 'question-timer-value',
     'answer-box', 'answer-text', 'answer-note',
     'play-box', 'play-score', 'play-score-note', 'play-input-wrap', 'play-answer', 'play-ox',
     'play-submit', 'play-log',
     'hint-box', 'hint-list', 'hint-open', 'hint-note',
     'setter-box', 'setter-answer', 'setter-hints', 'close-quiz', 'drop-quiz', 'setter-note',
-    'compose-box', 'type-pick', 'type-note', 'c-question', 'c-photo-preview', 'c-photo-pick',
+    'compose-box', 'mode-pick', 'mode-note', 'time-pick',
+    'type-pick', 'type-note', 'c-question', 'c-photo-preview', 'c-photo-pick',
     'c-photo-clear', 'c-photo-file', 'c-answer-field', 'c-answer', 'c-ox', 'c-hint-note',
     'c-hint1-label', 'c-hint2-label', 'c-hint3-label', 'c-hint1', 'c-hint2', 'c-hint3', 'c-submit',
     'pass-box', 'pass-list',
@@ -203,8 +228,10 @@ renderTabbar(user);
 
 /** 마지막으로 받아 온 상태 */
 let current = null;
-/** 출제 폼에서 고른 정답 종류 · 사진 (화면을 다시 그려도 유지된다) */
+/** 출제 폼에서 고른 정답 종류 · 진행 방식 · 제한시간 · 사진 (화면을 다시 그려도 유지된다) */
 let composeType = 'text';
+let composeMode = 'free';
+let composeTimeLimit = null;
 let composePhoto = null;
 
 /** 버튼을 잠그고 일을 시킨 뒤, 끝나면 화면을 새로 그린다. */
@@ -212,12 +239,11 @@ async function run(button, busyText, work) {
   const label = button.textContent;
   button.disabled = true;
   button.textContent = busyText;
-  showMessage(el.msg, '');
   try {
     await work();
     await load();
   } catch (err) {
-    showMessage(el.msg, err.message);
+    showToast(err.message, 'error');
   } finally {
     button.disabled = false;
     button.textContent = label;
@@ -256,6 +282,55 @@ function bindOx(box) {
 bindOx(el.playOx);
 bindOx(el.cOx);
 
+/* ---------------- 진행 방식 고르기 ---------------- */
+
+el.modePick.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-mode]');
+  if (!btn) return;
+  composeMode = btn.dataset.mode;
+  renderComposeMode();
+});
+
+el.timePick.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-seconds]');
+  if (!btn) return;
+  composeTimeLimit = Number(btn.dataset.seconds);
+  renderComposeMode();
+});
+
+/** 고른 방식에 맞춰 버튼 선택 상태 · 제한시간 칩 · 안내문을 맞춘다. */
+function renderComposeMode() {
+  const game = current?.game;
+  const modes = game?.modes ?? [];
+  const picked = modes.find((m) => m.key === composeMode) ?? modes[0];
+  if (picked) composeMode = picked.key;
+
+  for (const btn of el.modePick.querySelectorAll('[data-mode]')) {
+    btn.setAttribute('aria-selected', String(btn.dataset.mode === composeMode));
+  }
+
+  // 제한시간 칩은 '제한시간' 방식일 때만 나온다
+  const timed = !!picked?.timed;
+  el.timePick.classList.toggle('hidden', !timed);
+  if (timed) {
+    composeTimeLimit ??= game?.defaultTimeLimit ?? null;
+    for (const btn of el.timePick.querySelectorAll('[data-seconds]')) {
+      btn.setAttribute('aria-pressed', String(Number(btn.dataset.seconds) === composeTimeLimit));
+    }
+  }
+
+  const limitLabel = timeLimitLabel();
+  el.modeNote.textContent = timed && limitLabel
+    ? `${picked.setterNote} 지금 고른 시간은 ${limitLabel}이에요.`
+    : picked?.setterNote ?? '';
+}
+
+/** 지금 고른 제한시간의 이름표 ("5분"). 제한시간 방식이 아니면 null */
+function timeLimitLabel() {
+  if (composeMode !== 'timed') return null;
+  return (current?.game?.timeLimits ?? []).find((t) => t.seconds === composeTimeLimit)?.label ?? null;
+}
+
 /* ---------------- 문제 출제 ---------------- */
 
 el.typePick.addEventListener('click', (e) => {
@@ -289,12 +364,11 @@ el.cPhotoFile.addEventListener('change', async () => {
   const file = el.cPhotoFile.files?.[0];
   el.cPhotoFile.value = '';
   if (!file) return;
-  showMessage(el.msg, '');
   try {
     composePhoto = await shrinkPhoto(file);
     renderComposePhoto();
   } catch (err) {
-    showMessage(el.msg, err.message);
+    showToast(err.message, 'error');
   }
 });
 
@@ -311,23 +385,44 @@ function renderComposePhoto() {
   el.cPhotoPick.textContent = composePhoto ? '다른 사진으로' : '사진 넣기 (선택)';
 }
 
-el.cSubmit.addEventListener('click', () => {
+el.cSubmit.addEventListener('click', async () => {
   const question = el.cQuestion.value.trim();
   const answer = composeType === 'ox' ? oxValue(el.cOx) : el.cAnswer.value.trim();
-  if (!question) return showMessage(el.msg, '문제를 입력해 주세요.');
-  if (!answer) return showMessage(el.msg, '정답을 입력해 주세요.');
+  if (!question) return showToast('문제를 입력해 주세요.', 'error');
+  if (!answer) return showToast('정답을 입력해 주세요.', 'error');
 
+  const mode = (current?.game?.modes ?? []).find((m) => m.key === composeMode);
+  const limitLabel = timeLimitLabel();
   const hints = [el.cHint1.value, el.cHint2.value, el.cHint3.value];
   const filled = hints.filter((h) => h.trim()).length;
-  const ask = filled
-    ? `문제를 출제할까요? 힌트는 ${filled}개예요.`
-    : '힌트 없이 문제를 출제할까요?';
-  if (!confirm(`${ask}\n\n정답: ${answer}`)) return;
+
+  // 한 번 내면 되돌리기 어려우니, 고른 방식과 정답을 눈으로 한 번 더 짚게 한다
+  const ok = await confirmDialog({
+    icon: mode?.icon ?? '🧠',
+    title: '이대로 문제를 낼까요?',
+    message: [
+      `${mode?.icon ?? ''} ${mode?.label ?? '자유'}${limitLabel ? ` ${limitLabel}` : ''} · ${
+        filled ? `힌트 ${filled}단계` : '힌트 없음'
+      }`,
+      mode?.setterNote ?? '',
+    ].filter(Boolean).join('\n'),
+    detail: `정답: ${answer}`,
+    confirmText: '문제 내기',
+  });
+  if (!ok) return;
 
   return run(el.cSubmit, '출제 중…', async () => {
-    await api('/api/quiz', {
+    const res = await api('/api/quiz', {
       method: 'POST',
-      body: { answerType: composeType, question, answer, hints, photo: composePhoto },
+      body: {
+        answerType: composeType,
+        mode: composeMode,
+        timeLimit: composeTimeLimit,
+        question,
+        answer,
+        hints,
+        photo: composePhoto,
+      },
     });
     el.cQuestion.value = '';
     el.cAnswer.value = '';
@@ -336,7 +431,12 @@ el.cSubmit.addEventListener('click', () => {
     el.cHint3.value = '';
     composePhoto = null;
     renderComposePhoto();
-    showMessage(el.msg, '문제를 냈어요. 이제 다들 맞혀 보라고 알려 주세요!', 'ok');
+    showToast(
+      res.timeLimitLabel
+        ? `문제를 냈어요. ${res.timeLimitLabel} 안에 맞혀야 해요!`
+        : '문제를 냈어요. 이제 다들 맞혀 보라고 알려 주세요!',
+      'ok',
+    );
   });
 });
 
@@ -345,18 +445,27 @@ el.cSubmit.addEventListener('click', () => {
 el.playSubmit.addEventListener('click', () => {
   const type = current?.quiz?.answerType;
   const answer = type === 'ox' ? oxValue(el.playOx) : el.playAnswer.value.trim();
-  if (!answer) return showMessage(el.msg, '정답을 입력해 주세요.');
+  if (!answer) return showToast('정답을 입력해 주세요.', 'error');
 
   return run(el.playSubmit, '제출 중…', async () => {
     const res = await api('/api/quiz/answer', { method: 'POST', body: { answer } });
     el.playAnswer.value = '';
     for (const b of el.playOx.querySelectorAll('[data-ox]')) b.setAttribute('aria-pressed', 'false');
-    showMessage(
-      el.msg,
-      res.correct
-        ? `정답이에요! ${res.first ? '가장 먼저 맞혔어요 🏆 · ' : ''}+${res.score}점`
-        : `아쉬워요, 틀렸어요. (오답 ${res.wrongs}회 · 지금 맞히면 ${res.potentialScore}점)`,
-      res.correct ? 'ok' : 'error',
+
+    if (!res.correct) {
+      return showToast(
+        `아쉬워요, 틀렸어요. (오답 ${res.wrongs}회 · 지금 맞히면 ${res.potentialScore}점)`,
+        'error',
+      );
+    }
+
+    // 선착순 문제는 이 답으로 퀴즈가 끝난다 — 그 사실까지 한 줄에 알려 준다
+    const head = res.first ? '정답이에요! 가장 먼저 맞혔어요 🏆' : '정답이에요!';
+    showToast(
+      res.closed
+        ? `${head} +${res.score}점 · 선착순으로 맞혀서 퀴즈가 끝났어요.`
+        : `${head} +${res.score}점`,
+      'ok',
     );
   });
 });
@@ -365,32 +474,46 @@ el.playAnswer.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') el.playSubmit.click();
 });
 
-el.hintOpen.addEventListener('click', () => {
+el.hintOpen.addEventListener('click', async () => {
   const penalty = current?.me?.nextHintPenalty ?? 0;
   const stage = (current?.me?.hintsUsed ?? 0) + 1;
-  if (!confirm(`${stage}단계 힌트를 열까요? 얻을 수 있는 점수가 ${penalty}점 깎여요.`)) return;
+
+  const ok = await confirmDialog({
+    icon: '💡',
+    title: `${stage}단계 힌트를 열까요?`,
+    message: '한 번 열면 되돌릴 수 없어요. 힌트는 나에게만 보여요.',
+    detail: `얻을 수 있는 점수가 ${penalty}점 깎여요`,
+    confirmText: '힌트 열기',
+  });
+  if (!ok) return;
 
   return run(el.hintOpen, '여는 중…', async () => {
     const res = await api('/api/quiz/hint', { method: 'POST' });
-    showMessage(
-      el.msg,
-      `${res.stage}단계 힌트를 열었어요. (-${res.penalty}점 · 지금 맞히면 ${res.potentialScore}점)`,
+    showToast(
+      `${res.stage}단계 힌트를 열었어요. (−${res.penalty}점 · 지금 맞히면 ${res.potentialScore}점)`,
       'ok',
     );
   });
 });
 
-el.closeQuiz.addEventListener('click', () => {
+el.closeQuiz.addEventListener('click', async () => {
   const solved = current?.quiz?.solvedCount ?? 0;
-  const ask = solved
-    ? '퀴즈를 끝낼까요? 정답이 공개되고, 가장 먼저 맞힌 사람이 다음 출제자가 돼요.'
-    : '아직 맞힌 사람이 없어요. 그래도 끝낼까요? 출제 차례는 나에게 그대로 남아요.';
-  if (!confirm(ask)) return;
+  const mode = current?.quiz?.mode ?? 'free';
+
+  const ok = await confirmDialog({
+    icon: '🏁',
+    title: mode === 'free' ? '퀴즈를 끝낼까요?' : '지금 바로 끝낼까요?',
+    message: solved
+      ? '정답이 공개되고, 가장 먼저 맞힌 사람이 다음 출제자가 돼요.'
+      : '아직 맞힌 사람이 없어요. 지금 끝내면 출제 차례는 나에게 그대로 남아요.',
+    detail: solved ? `${solved}명이 맞혔어요` : '',
+    confirmText: '끝내기',
+  });
+  if (!ok) return;
 
   return run(el.closeQuiz, '끝내는 중…', async () => {
     const res = await api('/api/quiz/close', { method: 'POST' });
-    showMessage(
-      el.msg,
+    showToast(
       res.winner
         ? `${roundLabel(res.roundNo)} 종료 · 정답 ${res.answer} · 다음 출제자는 ${res.winner.displayName} 님이에요.`
         : `${roundLabel(res.roundNo)} 종료 · 정답 ${res.answer} · 맞힌 사람이 없어 출제 차례가 그대로 남았어요.`,
@@ -399,26 +522,41 @@ el.closeQuiz.addEventListener('click', () => {
   });
 });
 
-el.dropQuiz.addEventListener('click', () => {
-  if (!confirm('낸 문제를 지울까요? 회차로 세지 않고 통째로 사라져요.')) return;
+el.dropQuiz.addEventListener('click', async () => {
+  const ok = await confirmDialog({
+    icon: '🗑️',
+    title: '낸 문제를 지울까요?',
+    message: '회차로 세지 않고 통째로 사라져요. 지우고 나면 다시 낼 수 있어요.',
+    confirmText: '지우기',
+    tone: 'danger',
+  });
+  if (!ok) return;
+
   return run(el.dropQuiz, '지우는 중…', async () => {
     await api('/api/quiz', { method: 'DELETE' });
-    showMessage(el.msg, '문제를 지웠어요. 다시 낼 수 있어요.', 'ok');
+    showToast('문제를 지웠어요. 다시 낼 수 있어요.', 'ok');
   });
 });
 
-el.passList.addEventListener('click', (e) => {
+el.passList.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-pass]');
   if (!btn) return;
-  const name = btn.dataset.name ?? '';
-  if (!confirm(`${name} 님에게 출제 차례를 넘길까요?`)) return;
+
+  const ok = await confirmDialog({
+    icon: '🔁',
+    title: '출제 차례를 넘길까요?',
+    message: '넘기고 나면 그 사람이 다음 문제를 내요.',
+    detail: `${btn.dataset.name ?? ''} 님에게`,
+    confirmText: '넘기기',
+  });
+  if (!ok) return;
 
   return run(btn, '넘기는 중…', async () => {
     const res = await api('/api/quiz/turn', {
       method: 'POST',
       body: { userId: Number(btn.dataset.pass) },
     });
-    showMessage(el.msg, `${res.turn.displayName} 님에게 출제 차례를 넘겼어요.`, 'ok');
+    showToast(`${res.turn.displayName} 님에게 출제 차례를 넘겼어요.`, 'ok');
   });
 });
 
@@ -439,7 +577,8 @@ function renderRules(game) {
 
   el.rulesNote.textContent =
     '가장 먼저 정답을 낸 사람이 다음 출제자가 돼요. 점수는 맞히는 순간 확정되고, ' +
-    '아무리 깎여도 0점 밑으로는 내려가지 않아요. 퀴즈 점수는 랭킹의 전체 합계에도 들어가요.';
+    '아무리 깎여도 0점 밑으로는 내려가지 않아요. 퀴즈 점수는 랭킹의 전체 합계에도 들어가요. ' +
+    '퀴즈가 언제 끝나는지는 출제자가 고른 진행 방식(자유 · 선착순 1명 · 제한시간)을 따라요.';
 }
 
 /** 출제 차례 안내 */
@@ -484,7 +623,85 @@ function renderQuestion(state) {
     : quiz.hintCount
       ? `${quiz.answerTypeNote} 힌트 ${quiz.hintCount}단계`
       : `${quiz.answerTypeNote} 힌트 없음`;
+
+  // 진행 방식 이름표 — 제한시간 문제는 몇 분짜리였는지까지 붙인다
+  el.questionMode.textContent = `${quiz.modeIcon} ${quiz.modeLabel}${
+    quiz.timeLimitLabel ? ` ${quiz.timeLimitLabel}` : ''
+  }`;
+  el.questionModeNote.textContent = quiz.closed ? closedReasonNote(quiz) : quiz.modeNote;
 }
+
+/** 끝난 퀴즈가 어떻게 끝났는지 한 줄로 */
+function closedReasonNote(quiz) {
+  if (quiz.closedReason === 'first') return '가장 먼저 맞힌 사람이 나와서 끝났어요.';
+  if (quiz.closedReason === 'timeup') {
+    return `제한시간 ${quiz.timeLimitLabel ?? ''}이 끝나 자동으로 마감됐어요.`.replace('  ', ' ');
+  }
+  return '출제자가 끝냈어요.';
+}
+
+/* ---------------- 남은 시간 ---------------- */
+
+/** 이만큼 남으면 남은 시간 칸이 빨갛게 바뀌고 초마다 한 번씩 뛴다 */
+const SOON_SECONDS = 30;
+
+/** 제한시간 문제의 마감 시각 (브라우저 시각 기준). 제한시간이 없으면 null */
+let deadlineAt = null;
+/** 0초가 됐을 때 서버에 한 번만 다시 물어보기 위한 표시 */
+let timeupAsked = false;
+
+/** 90 -> "01:30", 3700 -> "1:01:40" */
+function clockText(seconds) {
+  const total = Math.max(0, seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+/**
+ * 남은 시간 칸.
+ *
+ * 서버가 "몇 초 남았는지" 를 재서 내려 주므로, 그 값을 받은 순간을 기준으로
+ * 마감 시각을 잡아 두고 1초마다 세어 내린다. 브라우저 시계가 틀어져 있어도
+ * 남은 시간은 어긋나지 않는다.
+ */
+function renderTimer(state) {
+  const { quiz } = state;
+  const on = !!quiz && !quiz.closed && quiz.mode === 'timed' && quiz.secondsLeft !== null;
+  el.questionTimer.classList.toggle('hidden', !on);
+
+  if (!on) {
+    deadlineAt = null;
+    return;
+  }
+  deadlineAt = Date.now() + quiz.secondsLeft * 1000;
+  timeupAsked = false;
+  el.questionTimerLabel.textContent = '남은 시간';
+  tickTimer();
+}
+
+function tickTimer() {
+  if (deadlineAt === null) return;
+
+  const left = Math.max(0, Math.round((deadlineAt - Date.now()) / 1000));
+  el.questionTimerValue.textContent = left ? clockText(left) : '종료';
+  el.questionTimer.classList.toggle('quiz-timer--soon', left > 0 && left <= SOON_SECONDS);
+  el.questionTimer.classList.toggle('quiz-timer--over', left === 0);
+
+  if (left) return;
+
+  // 마감은 서버가 확정한다. 화면은 0초가 되는 순간 한 번만 다시 물어본다.
+  el.questionTimerLabel.textContent = '제한시간';
+  if (timeupAsked) return;
+  timeupAsked = true;
+  load()
+    .then(() => showToast('제한시간이 끝났어요. 정답이 공개됐어요!', 'ok'))
+    .catch(() => {});
+}
+
+setInterval(tickTimer, 1000);
 
 /** 정답 공개 (끝난 뒤) */
 function renderAnswer(state) {
@@ -520,7 +737,9 @@ function renderPlay(state) {
     el.playScore.textContent = `${me.rank}번째로 맞혔어요 · +${me.score}점`;
     el.playScoreNote.textContent = me.rank === 1
       ? '가장 먼저 맞혔어요! 이 퀴즈가 끝나면 다음 출제자가 돼요.'
-      : '출제자가 퀴즈를 끝내면 정답이 공개돼요.';
+      : quiz.mode === 'timed'
+        ? '제한시간이 끝나면 정답이 공개돼요.'
+        : '출제자가 퀴즈를 끝내면 정답이 공개돼요.';
     el.playLog.innerHTML = '';
     return;
   }
@@ -535,6 +754,7 @@ function renderPlay(state) {
   el.playScore.textContent = `지금 맞히면 ${me.potentialScore}점`;
 
   const parts = [];
+  if (quiz.mode === 'first') parts.push('선착순 1명 — 맞히면 이 퀴즈가 바로 끝나요');
   parts.push(me.wouldBeFirst
     ? `아직 아무도 못 맞혔어요 (첫 정답 ${state.game.firstScore}점)`
     : `이미 맞힌 사람이 있어요 (${state.game.nextScore}점)`);
@@ -614,9 +834,18 @@ function renderSetter(state) {
   const untouched = !players.some((p) => p.attempts > 0 || p.hintsUsed > 0);
   el.dropQuiz.classList.toggle('hidden', !untouched);
 
-  el.setterNote.textContent = quiz.solvedCount
+  // 선착순·제한시간 문제는 서버가 알아서 끝내므로, 버튼은 '먼저 끝내기' 가 된다
+  el.closeQuiz.textContent = quiz.mode === 'free' ? '퀴즈 종료하기' : '지금 바로 끝내기';
+
+  const modeNote = quiz.mode === 'first'
+    ? '가장 먼저 맞힌 사람이 나오면 저절로 끝나요.'
+    : quiz.mode === 'timed'
+      ? `제한시간 ${quiz.timeLimitLabel ?? ''}이 지나면 저절로 끝나요.`.replace('  ', ' ')
+      : '';
+  const solvedNote = quiz.solvedCount
     ? `${quiz.solvedCount}명이 맞혔어요. 끝내면 가장 먼저 맞힌 사람이 다음 출제자가 돼요.`
     : '아직 맞힌 사람이 없어요. 지금 끝내면 출제 차례가 나에게 그대로 남아요.';
+  el.setterNote.textContent = [modeNote, solvedNote].filter(Boolean).join(' ');
 }
 
 /** 출제 폼 · 턴 넘기기 */
@@ -625,6 +854,30 @@ function renderCompose(state) {
   el.composeBox.classList.toggle('hidden', !on);
   el.passBox.classList.toggle('hidden', !on);
   if (!on) return;
+
+  // 진행 방식과 제한시간 목록도 서버가 내려 준 그대로 만든다
+  const modes = state.game.modes ?? [];
+  if (el.modePick.childElementCount !== modes.length) {
+    composeMode = state.game.defaultMode ?? composeMode;
+    el.modePick.innerHTML = modes
+      .map(
+        (m) => `<button class="segmented__item" type="button" role="tab" data-mode="${m.key}"
+                        aria-selected="false">${m.icon} ${escapeHtml(m.label)}</button>`,
+      )
+      .join('');
+  }
+
+  const limits = state.game.timeLimits ?? [];
+  if (el.timePick.childElementCount !== limits.length) {
+    composeTimeLimit ??= state.game.defaultTimeLimit ?? null;
+    el.timePick.innerHTML = limits
+      .map(
+        (t) => `<button class="chip" type="button" data-seconds="${t.seconds}"
+                        aria-pressed="false">${escapeHtml(t.label)}</button>`,
+      )
+      .join('');
+  }
+  renderComposeMode();
 
   // 정답 종류 고르는 줄은 서버가 내려 준 목록대로 만든다
   const types = state.game.answerTypes ?? [];
@@ -726,13 +979,15 @@ async function load() {
   const running = !!quiz && !quiz.closed;
   el.roundBadge.textContent = roundLabel(running ? state.roundNo : state.nextRoundNo);
   el.roundNote.textContent = running
-    ? '진행 중'
+    ? `진행 중 · ${quiz.modeLabel}${quiz.timeLimitLabel ? ` ${quiz.timeLimitLabel}` : ''}`
     : quiz ? '다음 문제 준비 중' : '첫 문제를 기다리는 중';
 
   if (!state.turn && !quiz) {
     el.subtitle.textContent = '운영자가 출제자를 지정하면 시작돼요';
   } else if (quiz && !quiz.closed) {
-    el.subtitle.innerHTML = `${personChip(quiz.setter)} 님의 문제 · ${quiz.solvedCount}명이 맞혔어요`;
+    el.subtitle.innerHTML = `${personChip(quiz.setter)} 님의 문제 · ${quiz.modeIcon} ${
+      escapeHtml(quiz.modeLabel)
+    } · ${quiz.solvedCount}명이 맞혔어요`;
   } else if (state.isTurnHolder) {
     el.subtitle.textContent = '내가 다음 문제를 낼 차례예요';
   } else {
@@ -741,6 +996,7 @@ async function load() {
 
   renderTurn(state);
   renderQuestion(state);
+  renderTimer(state);
   renderAnswer(state);
   renderPlay(state);
   renderHints(state);
@@ -759,7 +1015,7 @@ async function load() {
 try {
   await load();
 } catch (err) {
-  showMessage(el.msg, `불러오지 못했습니다: ${err.message}`);
+  showToast(`불러오지 못했습니다: ${err.message}`, 'error');
   el.subtitle.textContent = '연결을 확인해 주세요';
   el.players.innerHTML = '<p class="muted center">잠시 후 다시 시도합니다.</p>';
 }

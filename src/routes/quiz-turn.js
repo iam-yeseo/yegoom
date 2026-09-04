@@ -5,12 +5,17 @@
 // (먼저 그 퀴즈를 끝내야 한다).
 
 import { fail, json, readJson, requireUser } from '../lib/util.js';
-import { getQuizTurn, openQuiz, personById, setQuizTurnStatements } from '../lib/quiz.js';
+import {
+  getQuizTurn, openQuiz, personById, setQuizTurnStatements, settleExpiredQuiz,
+} from '../lib/quiz.js';
 
 export async function onRequestPost(context) {
   const db = context.env.DB;
   const { user, response } = await requireUser(context);
   if (response) return response;
+
+  // 제한시간이 끝난 퀴즈가 남아 있으면 먼저 마감된다 (그래야 턴을 넘길 수 있다)
+  await settleExpiredQuiz(db);
 
   const turn = await getQuizTurn(db);
   if (turn?.id !== user.id) return fail(403, '출제 차례인 사람만 턴을 넘길 수 있어요.');

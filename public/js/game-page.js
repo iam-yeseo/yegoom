@@ -5,11 +5,15 @@
 //
 // 정답을 기록하는 쪽은 운영자가 아니라 출제자다. 기록해 둔 정답과 "기록했는지
 // 여부" 는 출제자 본인에게만 보이고, 다른 사람 화면에는 흔적조차 남지 않는다.
+//
+// 되돌리기 어려운 일은 앱 톤에 맞춘 확인 창으로 한 번 묻고, 결과는 화면 아래
+// 토스트로 알린다 (public/js/ui.js). 화면 맨 위 안내문은 스크롤하면 놓치기 쉽다.
 
 import {
   GAMES, api, avatarOf, escapeHtml, personChip, renderTabbar, requireLogin, roundLabel,
-  showMessage, startClock,
+  startClock,
 } from '/js/common.js';
+import { confirmDialog, showToast } from '/js/ui.js';
 import { createTimeInput } from '/js/time-input.js';
 
 const gameKey = document.body.dataset.game === 'morning' ? 'morning' : 'evening';
@@ -35,8 +39,6 @@ document.querySelector('[data-app]').innerHTML = `
     <span id="title-text" class="page-title__main">오늘의 ${GAME.subject}</span>
     <span id="subtitle">불러오는 중…</span>
   </h1>
-
-  <p id="msg" class="msg hidden" role="status"></p>
 
   <section id="answer-box" class="answer hidden">
     <div class="answer__label">오늘의 정답</div>
@@ -136,7 +138,7 @@ document.querySelector('[data-app]').innerHTML = `
 
 const el = Object.fromEntries(
   [
-    'round-badge', 'round-note', 'title-text', 'subtitle', 'msg',
+    'round-badge', 'round-note', 'title-text', 'subtitle',
     'answer-box', 'answer-time', 'answer-note', 'closed-box', 'closed-text',
     'guess-box', 'guess-submit', 'guess-hint', 'chips',
     'setter-box', 'setter-label', 'setter-avatar', 'setter-name', 'setter-hint',
@@ -187,12 +189,11 @@ async function run(button, busyText, work) {
   const label = button.textContent;
   button.disabled = true;
   button.textContent = busyText;
-  showMessage(el.msg, '');
   try {
     await work();
     await load();
   } catch (err) {
-    showMessage(el.msg, err.message);
+    showToast(err.message, 'error');
     button.textContent = label;
   } finally {
     button.disabled = false;
@@ -201,53 +202,67 @@ async function run(button, busyText, work) {
 
 el.guessSubmit.addEventListener('click', () => {
   const time = guessInput.value;
-  if (!time) return showMessage(el.msg, '예측할 시간을 입력해 주세요.');
+  if (!time) return showToast('예측할 시간을 입력해 주세요.', 'error');
   return run(el.guessSubmit, '확정 중…', async () => {
     const res = await api('/api/guess', { method: 'POST', body: { game: gameKey, time } });
-    showMessage(el.msg, `${res.guess} 로 확정했어요.`, 'ok');
+    showToast(`${res.guess} 로 확정했어요.`, 'ok');
   });
 });
 
-el.record.addEventListener('click', () => {
+el.record.addEventListener('click', async () => {
   const isButton = GAME.key === 'morning';
   const time = isButton ? null : answerInput.value;
-  if (!isButton && !time) return showMessage(el.msg, '정답 시간을 입력해 주세요.');
+  if (!isButton && !time) return showToast('정답 시간을 입력해 주세요.', 'error');
 
-  const ask = isButton
-    ? '지금 시각을 오늘의 기상 시각으로 기록할까요?'
-    : `오늘의 정답을 ${time} 로 기록할까요?`;
-  if (!confirm(`${ask}\n\n기록한 사실은 아무에게도 보이지 않아요.`)) return;
+  const ok = await confirmDialog({
+    icon: GAME.icon,
+    title: isButton ? '지금 시각으로 기록할까요?' : '오늘의 정답을 기록할까요?',
+    message: '기록한 사실은 아무에게도 보이지 않아요. 공개 전까지 나만 볼 수 있어요.',
+    detail: isButton ? '' : `${GAME.subject} ${time}`,
+    confirmText: '기록하기',
+  });
+  if (!ok) return;
 
   return run(el.record, '기록 중…', async () => {
     const res = await api('/api/answer', {
       method: 'POST',
       body: time ? { game: gameKey, time } : { game: gameKey },
     });
-    showMessage(el.msg, `${res.answer} 로 기록했어요. 나만 볼 수 있어요.`, 'ok');
+    showToast(`${res.answer} 로 기록했어요. 나만 볼 수 있어요.`, 'ok');
   });
 });
 
-el.recordClear.addEventListener('click', () => {
-  if (!confirm('기록해 둔 정답을 지울까요?')) return;
+el.recordClear.addEventListener('click', async () => {
+  const ok = await confirmDialog({
+    icon: '🗑️',
+    title: '기록해 둔 정답을 지울까요?',
+    message: '지우고 나면 다시 기록할 수 있어요.',
+    confirmText: '지우기',
+    tone: 'danger',
+  });
+  if (!ok) return;
+
   return run(el.recordClear, '지우는 중…', async () => {
     await api(`/api/answer?game=${gameKey}`, { method: 'DELETE' });
-    showMessage(el.msg, '기록을 지웠어요.', 'ok');
+    showToast('기록을 지웠어요.', 'ok');
   });
 });
 
-el.burn.addEventListener('click', () => {
+el.burn.addEventListener('click', async () => {
   const left = current?.chances?.remaining ?? 0;
-  const ask = left > 1
-    ? `기회를 한 번 쓸까요? 쓰고 나면 ${left - 1}번 남아요.`
-    : '마지막 기회를 쓸까요? 쓰고 나면 정답을 공개할 수 있어요.';
-  if (!confirm(`${ask}\n\n지금 예측 중 정답에 가장 가까운 사람에게 하이라이트가 들어갑니다.`)) {
-    return;
-  }
+
+  const ok = await confirmDialog({
+    icon: '🔦',
+    title: left > 1 ? '기회를 한 번 쓸까요?' : '마지막 기회를 쓸까요?',
+    message: '지금 예측 중 정답에 가장 가까운 사람에게 하이라이트가 들어가요.',
+    detail: left > 1 ? `쓰고 나면 ${left - 1}번 남아요` : '쓰고 나면 정답을 공개할 수 있어요',
+    confirmText: '기회 쓰기',
+  });
+  if (!ok) return;
 
   return run(el.burn, '쓰는 중…', async () => {
     const res = await api('/api/chance', { method: 'POST', body: { game: gameKey } });
-    showMessage(
-      el.msg,
+    showToast(
       res.closest
         ? `${res.seq}번째 기회 · ${res.closest.displayName} 님이 가장 가까워요. (남은 기회 ${res.remaining}번)`
         : `${res.seq}번째 기회 · 5분 안에 든 사람이 없어요. (남은 기회 ${res.remaining}번)`,
@@ -256,12 +271,18 @@ el.burn.addEventListener('click', () => {
   });
 });
 
-el.reveal.addEventListener('click', () => {
-  if (!confirm('정답을 공개할까요? 공개하면 오차와 점수가 바로 확정됩니다.')) return;
+el.reveal.addEventListener('click', async () => {
+  const ok = await confirmDialog({
+    icon: '📣',
+    title: '정답을 공개할까요?',
+    message: '공개하면 모두의 오차와 점수가 그 자리에서 확정돼요. 되돌리려면 운영자에게 부탁해야 해요.',
+    confirmText: '공개하기',
+  });
+  if (!ok) return;
+
   return run(el.reveal, '공개 중…', async () => {
     const res = await api('/api/reveal', { method: 'POST', body: { game: gameKey } });
-    showMessage(
-      el.msg,
+    showToast(
       `${roundLabel(res.roundNo)} 정답 ${res.answer} 공개 완료 · 참가자 ${res.participants}명`,
       'ok',
     );
@@ -513,7 +534,7 @@ try {
   await load();
 } catch (err) {
   // 네트워크가 끊기면 스켈레톤만 남으므로 상태를 알려 준다
-  showMessage(el.msg, `불러오지 못했습니다: ${err.message}`);
+  showToast(`불러오지 못했습니다: ${err.message}`, 'error');
   el.subtitle.textContent = '연결을 확인해 주세요';
   el.players.innerHTML = '<p class="muted center">잠시 후 다시 시도합니다.</p>';
 }

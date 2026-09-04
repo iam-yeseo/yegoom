@@ -138,6 +138,9 @@
           return `<div class="history-item">
             <div class="history-item__head">
               <span class="history-item__date">
+                <span class="tag tag--mode">${h.modeIcon} ${escapeHtml(h.modeLabel)}${
+                  h.timeLimitLabel ? ` ${escapeHtml(h.timeLimitLabel)}` : ''
+                }</span>
                 <span class="tag">${escapeHtml(h.answerTypeLabel)}</span>
                 ${escapeHtml(roundLabel(h.roundNo))}${setter}
               </span>

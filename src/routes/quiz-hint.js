@@ -5,13 +5,16 @@
 // 열 때마다 그 단계만큼 점수가 깎인다 (1단계 1점, 2단계 2점, 3단계 3점 — 누적).
 
 import { fail, json, requireUser } from '../lib/util.js';
-import { hintsOf, nextHintPenalty, openQuiz, scoreFor } from '../lib/quiz.js';
+import { hintsOf, nextHintPenalty, openQuiz, scoreFor, settleExpiredQuiz } from '../lib/quiz.js';
 
 export async function onRequestPost(context) {
   const db = context.env.DB;
   const { user, response } = await requireUser(context);
   if (response) return response;
   if (user.role !== 'player') return fail(403, '운영자는 힌트를 쓸 수 없습니다.');
+
+  // 시간이 다 된 뒤에 힌트를 열어 점수만 깎이는 일이 없도록 먼저 확인한다
+  if (await settleExpiredQuiz(db)) return fail(409, '제한시간이 끝나 마감됐어요.');
 
   const quiz = await openQuiz(db);
   if (!quiz) return fail(409, '지금은 진행 중인 퀴즈가 없어요.');

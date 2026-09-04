@@ -7,12 +7,16 @@
 // 정답과 힌트는 진행 중에 아무에게나 내려가지 않는다.
 //   정답  출제자 본인에게만 (끝나면 모두에게)
 //   힌트  자기가 연 단계까지만 (끝나면 모두에게)
+//
+// 제한시간이 걸린 퀴즈는 여기서 먼저 마감을 확인한다. 화면이 15초마다 이 경로를
+// 물어보므로, 시간이 지나면 곧 끝난 상태로 바뀌어 내려간다.
 
 import { fail, json, personOf, readJson, requireUser } from '../lib/util.js';
 import {
-  ANSWER_TYPES, MAX_HINTS, answerTypeOf, closedCount, getQuizTurn, hintsOf, latestQuiz,
-  nextHintPenalty, normalizeAnswerText, normalizeHint, normalizeQuestion, openQuiz, personById,
-  quizInfo, quizPhotoUrl, quizPlayerRows, roundNumberFor, scoreFor,
+  ANSWER_TYPES, DEFAULT_MODE, DEFAULT_TIME_LIMIT, MAX_HINTS, answerTypeOf, closedCount,
+  formatDuration, getQuizTurn, hintsOf, latestQuiz, modeOf, nextHintPenalty, normalizeAnswerText,
+  normalizeHint, normalizeQuestion, normalizeTimeLimit, openQuiz, personById, quizInfo, quizModeOf,
+  quizPhotoUrl, quizPlayerRows, roundNumberFor, scoreFor, settleExpiredQuiz,
 } from '../lib/quiz.js';
 import { normalizeQuizPhoto } from '../lib/image.js';
 
@@ -20,6 +24,9 @@ export async function onRequestGet(context) {
   const db = context.env.DB;
   const { user, response } = await requireUser(context);
   if (response) return response;
+
+  // 시간이 다 된 퀴즈가 있으면 먼저 끝내 놓고, 그 결과를 읽어 내려 준다
+  await settleExpiredQuiz(db);
 
   const [quiz, turn, playersRes, totalsRes] = await Promise.all([
     latestQuiz(db),
@@ -110,6 +117,13 @@ export async function onRequestGet(context) {
   const solved = !!mine?.solved_at;
   const isPlayer = user.role === 'player';
 
+  // 진행 방식 — 제한시간이 걸린 퀴즈면 남은 시간(초)도 함께 내려 준다.
+  // 남은 시간은 서버 시계로 잰 값이라, 브라우저 시계가 틀어져 있어도 그대로 쓸 수 있다.
+  const mode = modeOf(quiz);
+  const secondsLeft = quiz.seconds_left === null || quiz.seconds_left === undefined
+    ? null
+    : Math.max(0, quiz.seconds_left);
+
   return json({
     ok: true,
     game: info,
@@ -129,6 +143,14 @@ export async function onRequestGet(context) {
       answerType: quiz.answer_type,
       answerTypeLabel: ANSWER_TYPES[quiz.answer_type]?.label ?? quiz.answer_type,
       answerTypeNote: ANSWER_TYPES[quiz.answer_type]?.note ?? '',
+      mode: mode.key,
+      modeLabel: mode.label,
+      modeIcon: mode.icon,
+      modeNote: mode.playerNote,
+      timeLimit: quiz.time_limit_sec ?? null,
+      timeLimitLabel: quiz.time_limit_sec ? formatDuration(quiz.time_limit_sec) : null,
+      secondsLeft: isOpen ? secondsLeft : null,
+      closedReason: !isOpen ? (quiz.closed_reason ?? 'setter') : null,
       question: quiz.question,
       photoUrl: quizPhotoUrl(quiz),
       hintCount: hints.length,
@@ -186,6 +208,9 @@ export async function onRequestPost(context) {
   if (response) return response;
   if (user.role !== 'player') return fail(403, '운영자는 문제를 낼 수 없습니다.');
 
+  // 앞 퀴즈의 제한시간이 지났다면 여기서 먼저 마감된다 — 그래야 바로 다음 문제를 낼 수 있다
+  await settleExpiredQuiz(db);
+
   const turn = await getQuizTurn(db);
   if (turn?.id !== user.id) return fail(403, '지금은 출제 차례가 아니에요.');
   if (await openQuiz(db)) return fail(409, '아직 진행 중인 퀴즈가 있어요.');
@@ -201,6 +226,18 @@ export async function onRequestPost(context) {
   const answer = normalizeAnswerText(answerType.key, body.answer);
   if (answer.error) return fail(400, answer.error);
 
+  // 진행 방식 — 아무것도 보내지 않은 예전 화면은 지금까지처럼 자유 모드가 된다
+  const mode = quizModeOf(body.mode ?? DEFAULT_MODE);
+  if (!mode) return fail(400, '진행 방식을 골라 주세요.');
+
+  // 제한시간은 'timed' 일 때만 쓴다. 다른 방식이면 마감 시각도 두지 않는다.
+  let timeLimit = null;
+  if (mode.timed) {
+    const picked = normalizeTimeLimit(body.timeLimit ?? DEFAULT_TIME_LIMIT);
+    if (picked.error) return fail(400, picked.error);
+    timeLimit = picked.value;
+  }
+
   // 비워 둔 단계는 빼고 앞에서부터 채운다 — 힌트는 1단계부터 차례로 열리기 때문이다
   const hints = [];
   for (const raw of (Array.isArray(body.hints) ? body.hints : []).slice(0, MAX_HINTS)) {
@@ -212,15 +249,26 @@ export async function onRequestPost(context) {
   const photo = body.photo ? normalizeQuizPhoto(body.photo) : null;
   if (photo?.error) return fail(400, photo.error);
 
+  // 제한시간의 시작은 '문제를 낸 순간' 이다. 마감 시각을 서버 시계로 박아 두면
+  // 그 뒤로는 누구의 시계도 끼어들 수 없다.
   const created = await db
     .prepare(
       `INSERT INTO quiz_rounds
-         (setter_user_id, answer_type, question, answer_text, hint1, hint2, hint3, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`,
+         (setter_user_id, answer_type, mode, time_limit_sec, deadline_at,
+          question, answer_text, hint1, hint2, hint3, status)
+       VALUES (?, ?, ?, ?,
+               CASE WHEN ? IS NULL THEN NULL
+                    ELSE datetime('now', '+' || ? || ' seconds') END,
+               ?, ?, ?, ?, ?, 'open')`,
     )
     .bind(
       user.id,
       answerType.key,
+      mode.key,
+      timeLimit,
+      // 마감 시각은 CASE 안에서 두 번 읽히므로 같은 값을 두 번 더 넘긴다
+      timeLimit,
+      timeLimit,
       question.value,
       answer.value,
       hints[0] ?? null,
@@ -247,6 +295,10 @@ export async function onRequestPost(context) {
     quizId,
     roundNo: await roundNumberFor(db, { status: 'open' }),
     answerType: answerType.key,
+    mode: mode.key,
+    modeLabel: mode.label,
+    timeLimit,
+    timeLimitLabel: timeLimit ? formatDuration(timeLimit) : null,
     hintCount: hints.length,
     hasPhoto: !!photo,
   });
@@ -260,6 +312,8 @@ export async function onRequestDelete(context) {
   const db = context.env.DB;
   const { user, response } = await requireUser(context);
   if (response) return response;
+
+  await settleExpiredQuiz(db);
 
   const quiz = await openQuiz(db);
   if (!quiz) return fail(409, '진행 중인 퀴즈가 없어요.');

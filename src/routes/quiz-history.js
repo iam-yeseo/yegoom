@@ -4,7 +4,7 @@
 // 힌트 내용은 담지 않는다 — 지나간 문제라도 굳이 다시 뿌릴 이유가 없다.
 
 import { json, photoUrl, requireUser } from '../lib/util.js';
-import { ANSWER_TYPES, quizInfo, quizPhotoUrl } from '../lib/quiz.js';
+import { ANSWER_TYPES, formatDuration, modeOf, quizInfo, quizPhotoUrl } from '../lib/quiz.js';
 
 export async function onRequestGet(context) {
   const { response } = await requireUser(context);
@@ -13,8 +13,8 @@ export async function onRequestGet(context) {
   const db = context.env.DB;
 
   const { results: rounds } = await db.prepare(
-    `SELECT q.id, q.round_no, q.answer_type, q.question, q.answer_text, q.has_photo,
-            q.created_at, q.closed_at,
+    `SELECT q.id, q.round_no, q.answer_type, q.mode, q.time_limit_sec, q.closed_reason,
+            q.question, q.answer_text, q.has_photo, q.created_at, q.closed_at,
             u.id AS setter_id, u.display_name AS setter_name,
             u.avatar AS setter_avatar, u.photo_version AS setter_photo_version
        FROM quiz_rounds q LEFT JOIN users u ON u.id = q.setter_user_id
@@ -58,6 +58,12 @@ export async function onRequestGet(context) {
       roundNo: r.round_no,
       answerType: r.answer_type,
       answerTypeLabel: ANSWER_TYPES[r.answer_type]?.label ?? r.answer_type,
+      // 어떤 방식으로 진행했던 판인지 — 진행 방식이 생기기 전 기록은 모두 자유 모드다
+      mode: modeOf(r).key,
+      modeLabel: modeOf(r).label,
+      modeIcon: modeOf(r).icon,
+      timeLimitLabel: r.time_limit_sec ? formatDuration(r.time_limit_sec) : null,
+      closedReason: r.closed_reason ?? 'setter',
       question: r.question,
       answer: r.answer_text,
       photoUrl: quizPhotoUrl(r),

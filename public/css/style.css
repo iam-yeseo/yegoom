@@ -1032,3 +1032,194 @@ textarea:focus {
   .tabbar__item { font-size: 10px; }
   .tabbar__icon { font-size: 17px; }
 }
+
+/* ---------- 확인 창 (브라우저 confirm 대신) ---------- */
+
+/* 사진 자르기 화면(.cropper, z-index 60)보다 위에 뜬다 — 자르는 중에도 확인을 물을 수 있다 */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(6, 8, 18, 0.74);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+  animation: modal-fade 0.16s ease-out;
+}
+
+.modal__sheet {
+  width: 100%;
+  max-width: 360px;
+  padding: 24px 20px 18px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  animation: modal-rise 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.modal__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 12px;
+  font-size: 26px;
+  line-height: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  word-break: keep-all;
+}
+
+.modal__body {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+  /* 줄바꿈을 적은 그대로 살린다 — 안내를 두 줄로 나눠 쓰는 확인 창이 있다 */
+  white-space: pre-line;
+  word-break: keep-all;
+}
+
+/* 확인 전에 한 번 더 눈으로 짚어야 하는 값 (정답, 넘길 사람 이름 같은 것) */
+.modal__detail {
+  margin-top: 14px;
+  padding: 12px 14px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: break-word;
+  background: var(--bg-soft);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.modal__actions { margin-top: 18px; }
+.modal__actions .btn { padding: 13px 12px; font-size: 15px; }
+
+@keyframes modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- 토스트 알림 ---------- */
+
+/* 화면 위쪽 .msg 는 스크롤을 내리면 보이지 않는다. 눌러서 답을 낸 결과처럼
+   "지금 막 일어난 일" 은 화면 아래에 고정해서 띄운다. */
+.toast-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(16px + var(--safe-bottom));
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  pointer-events: none;   /* 뒤 화면을 계속 만질 수 있어야 한다 */
+}
+
+/* 탭바가 있는 화면에서는 탭바 바로 위에 앉는다 */
+.toast-wrap--tabbar { bottom: calc(74px + var(--safe-bottom)); }
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  padding: 13px 15px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.46);
+  cursor: pointer;           /* 누르면 바로 사라진다 */
+  pointer-events: auto;
+  animation: toast-in 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toast__icon { flex: 0 0 auto; font-size: 15px; line-height: 1.45; }
+.toast__text { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+
+.toast--ok { color: #d3ffe3; background: #1c3a2b; border-color: rgba(74, 222, 128, 0.45); }
+.toast--error { color: #ffd7d3; background: #3d2029; border-color: rgba(248, 113, 113, 0.5); }
+.toast--out { animation: toast-out 0.2s ease-in forwards; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(10px); }
+}
+
+/* ---------- 퀴즈 진행 방식 ---------- */
+
+/* 출제 폼에서 고른 방식 · 문제 카드에 붙는 이름표 */
+.tag--mode { color: #241203; background: var(--accent-2); border-color: transparent; }
+
+/* 제한시간이 걸린 문제의 남은 시간 — 문제 카드 안에서 가장 눈에 띄어야 한다 */
+.quiz-timer {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.quiz-timer__label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); }
+
+.quiz-timer__value {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-2);
+}
+
+/* 1분 아래로 내려가면 색을 바꾸고 초마다 한 번씩 뛴다 */
+.quiz-timer--soon { border-color: rgba(248, 113, 113, 0.45); }
+.quiz-timer--soon .quiz-timer__value { color: var(--bad); animation: timer-beat 1s ease-in-out infinite; }
+.quiz-timer--over .quiz-timer__value { color: var(--muted); }
+
+@keyframes timer-beat {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.07); }
+}
+
+/* 제한시간 고르기 — 1분 · 3분 · 5분 … */
+.chips--time { grid-template-columns: repeat(5, 1fr); margin-top: 0; }
+.chips--time .chip { padding: 10px 2px; font-size: 13px; }
+
+@media (max-width: 360px) {
+  .chips--time .chip { font-size: 12px; }
+}

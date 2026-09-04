@@ -110,6 +110,10 @@ CREATE TABLE IF NOT EXISTS quiz_rounds (
      round_no       INTEGER,
      setter_user_id INTEGER REFERENCES users(id),
      answer_type    TEXT    NOT NULL CHECK (answer_type IN ('number', 'text', 'ox')),
+     mode           TEXT    NOT NULL DEFAULT 'free'
+                            CHECK (mode IN ('free', 'first', 'timed')),
+     time_limit_sec INTEGER,
+     deadline_at    TEXT,
      question       TEXT    NOT NULL,
      answer_text    TEXT    NOT NULL,
      hint1          TEXT,
@@ -117,6 +121,7 @@ CREATE TABLE IF NOT EXISTS quiz_rounds (
      hint3          TEXT,
      has_photo      INTEGER NOT NULL DEFAULT 0,
      status         TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+     closed_reason  TEXT,
      created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
      closed_at      TEXT
    );

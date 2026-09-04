@@ -7,10 +7,11 @@
 //            그다음부터는 가장 먼저 정답을 맞힌 사람에게 저절로 넘어간다.
 //   출제     턴을 가진 사람이 문제 · 정답 · (선택) 사진 1장 · (선택) 힌트 3단계를 적는다.
 //   정답     숫자만 / 텍스트 / OX 세 가지 중 하나로 받는다.
+//   방식     출제자가 셋 중에서 고른다 — 자유 / 선착순 1명 / 제한시간 (QUIZ_MODES).
 //   힌트     플레이어가 열면 자기에게만 보이고, 열 때마다 얻을 점수가 깎인다.
 //   점수     가장 먼저 맞히면 10점, 그 뒤로 맞히면 8점.
 //            여기서 힌트 감점(1·2·3단계 누적)과 오답 감점(1회당 1점)을 뺀다. 0점 밑으로는 안 내려간다.
-//   종료     출제자가 끝내면 정답이 공개되고, 가장 먼저 맞힌 사람이 다음 출제자가 된다.
+//   종료     정답이 공개되고, 가장 먼저 맞힌 사람이 다음 출제자가 된다. 끝나는 계기는 방식마다 다르다.
 //            정답자가 없으면 턴은 그대로 남아, 다시 내거나 다른 사람에게 넘길 수 있다.
 
 import { personOf } from './util.js';
@@ -76,6 +77,90 @@ export const ANSWER_TYPES = {
 };
 
 export const ANSWER_TYPE_KEYS = Object.keys(ANSWER_TYPES);
+
+/* ---------------- 진행 방식 ---------------- */
+
+/**
+ * 퀴즈가 언제 끝나는지 — 출제자가 문제를 내면서 고른다.
+ *
+ *   free   지금까지처럼 출제자가 '퀴즈 종료' 를 누를 때까지 계속된다
+ *   first  첫 정답이 나오는 순간 서버가 알아서 끝낸다 (선착순 한 명)
+ *   timed  낸 시각부터 제한시간이 지나면 서버가 알아서 끝낸다
+ *
+ * 어느 방식이든 끝나는 모양은 같다 — 정답이 공개되고, 가장 먼저 맞힌 사람이
+ * 다음 출제자가 된다. 출제자는 언제든 직접 먼저 끝낼 수도 있다.
+ */
+export const QUIZ_MODES = {
+  free: {
+    key: 'free',
+    label: '자유',
+    icon: '🎈',
+    summary: '출제자가 끝낼 때까지',
+    setterNote: '맞힌 사람이 계속 쌓여요. 언제 끝낼지는 내가 정해요.',
+    playerNote: '출제자가 끝낼 때까지 도전할 수 있어요.',
+    timed: false,
+  },
+  first: {
+    key: 'first',
+    label: '선착순 1명',
+    icon: '⚡',
+    summary: '첫 정답이 나오면 끝',
+    setterNote: '가장 먼저 맞힌 사람이 나오는 순간 자동으로 끝나요.',
+    playerNote: '가장 먼저 맞힌 한 사람이 나오면 바로 끝나요.',
+    timed: false,
+  },
+  timed: {
+    key: 'timed',
+    label: '제한시간',
+    icon: '⏱️',
+    summary: '시간이 다 되면 마감',
+    setterNote: '정해 둔 시간이 지나면 자동으로 끝나고 정답이 공개돼요.',
+    playerNote: '남은 시간 안에 맞혀야 해요.',
+    timed: true,
+  },
+};
+
+export const QUIZ_MODE_KEYS = Object.keys(QUIZ_MODES);
+
+/** 아무것도 고르지 않았을 때 (예전 DB 에 남아 있는 퀴즈도 이것으로 본다) */
+export const DEFAULT_MODE = 'free';
+
+/** 제한시간으로 고를 수 있는 값 (초) */
+export const TIME_LIMITS = [60, 180, 300, 600, 1800];
+export const DEFAULT_TIME_LIMIT = 300;
+
+/** 넘어온 값이 진행 방식이 맞는지. 아니면 null */
+export function quizModeOf(value) {
+  const key = String(value ?? '').trim();
+  return QUIZ_MODE_KEYS.includes(key) ? QUIZ_MODES[key] : null;
+}
+
+/** 예전 DB 에 mode 가 없는 퀴즈도 자유 모드로 읽는다 */
+export function modeOf(quiz) {
+  return QUIZ_MODES[quiz?.mode] ?? QUIZ_MODES[DEFAULT_MODE];
+}
+
+/** 제한시간 — 고를 수 있는 값 중 하나여야 한다 */
+export function normalizeTimeLimit(input) {
+  const seconds = Number(input);
+  if (!Number.isInteger(seconds) || !TIME_LIMITS.includes(seconds)) {
+    return { error: '제한시간을 골라 주세요.' };
+  }
+  return { value: seconds };
+}
+
+/** 300 -> "5분", 90 -> "1분 30초", 3600 -> "1시간" */
+export function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const parts = [];
+  if (h) parts.push(`${h}시간`);
+  if (m) parts.push(`${m}분`);
+  if (s || !parts.length) parts.push(`${s}초`);
+  return parts.join(' ');
+}
 
 /** 넘어온 값이 정답 종류가 맞는지. 아니면 null */
 export function answerTypeOf(value) {
@@ -249,8 +334,13 @@ export async function hasQuizTurn(db, userId) {
 
 /* ---------------- 퀴즈 읽기 ---------------- */
 
-const QUIZ_COLUMNS = `id, round_no, setter_user_id, answer_type, question, answer_text,
-                      hint1, hint2, hint3, has_photo, status, created_at, closed_at`;
+// seconds_left 는 제한시간이 걸린 퀴즈에만 값이 들어간다 (deadline_at 이 NULL 이면 NULL).
+// 남은 시간을 서버 시계로 재서 내려 주므로, 브라우저 시계가 틀어져 있어도 상관없다.
+const QUIZ_COLUMNS = `id, round_no, setter_user_id, answer_type, mode, time_limit_sec, deadline_at,
+                      question, answer_text, hint1, hint2, hint3, has_photo, status,
+                      closed_reason, created_at, closed_at,
+                      CAST(strftime('%s', deadline_at) AS INTEGER)
+                        - CAST(strftime('%s', 'now') AS INTEGER) AS seconds_left`;
 
 /** 지금 열려 있는 퀴즈. 없으면 null */
 export async function openQuiz(db) {
@@ -317,6 +407,78 @@ export async function firstSolverId(db, quizId) {
   return row?.user_id ?? null;
 }
 
+/* ---------------- 퀴즈 끝내기 ---------------- */
+
+/**
+ * 퀴즈를 끝낸다 — 정답이 모두에게 공개되고 회차가 하나 올라가며, 출제 턴이 넘어간다.
+ *   정답자가 있으면  가장 먼저 맞힌 사람이 다음 출제자가 된다
+ *   정답자가 없으면  턴은 출제자에게 그대로 남는다
+ *
+ * 출제자가 직접 끝낼 때(/api/quiz/close)와, 선착순·제한시간이 저절로 끝날 때 모두
+ * 이 함수 하나를 지난다. 그래서 어떤 방식으로 끝나도 뒷정리가 똑같다.
+ *
+ * UPDATE 는 status='open' 인 줄만 건드리므로, 같은 퀴즈를 두 번 끝내려 해도
+ * 회차가 두 번 올라가지는 않는다.
+ *
+ * @param {'setter'|'first'|'timeup'} reason 끝난 계기 (화면 안내 문구에 쓴다)
+ */
+export async function closeQuizRound(db, quiz, { reason = 'setter' } = {}) {
+  const [winnerId, closed] = await Promise.all([firstSolverId(db, quiz.id), closedCount(db)]);
+  const nextTurnId = winnerId ?? quiz.setter_user_id;
+  const roundNo = closed + 1;
+
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE quiz_rounds
+            SET status = 'closed', closed_at = datetime('now'), round_no = ?, closed_reason = ?
+          WHERE id = ? AND status = 'open'`,
+      )
+      .bind(roundNo, reason, quiz.id),
+    ...setQuizTurnStatements(db, nextTurnId),
+  ]);
+
+  const solved = await db
+    .prepare(`SELECT COUNT(*) AS n FROM quiz_players WHERE quiz_id = ? AND solved_at IS NOT NULL`)
+    .bind(quiz.id)
+    .first();
+
+  return {
+    quizId: quiz.id,
+    roundNo,
+    reason,
+    answer: quiz.answer_text,
+    solvedCount: solved?.n ?? 0,
+    winnerId,
+    nextTurnId,
+  };
+}
+
+/**
+ * 제한시간이 다 된 퀴즈를 마감한다. 마감했으면 그 결과를, 마감할 게 없으면 null.
+ *
+ * 워커에는 타이머가 없으므로 "누군가 퀴즈를 건드릴 때" 확인한다. 화면이 15초마다
+ * 상태를 물어보기 때문에 시간이 지나면 곧 마감되고, 그 사이에 답을 내려 해도
+ * 정답 제출이 먼저 이 함수를 지나므로 늦은 답이 받아들여지지는 않는다.
+ */
+export async function settleExpiredQuiz(db) {
+  let quiz;
+  try {
+    quiz = await db
+      .prepare(
+        `SELECT ${QUIZ_COLUMNS} FROM quiz_rounds
+          WHERE status = 'open' AND deadline_at IS NOT NULL AND deadline_at <= datetime('now')
+          ORDER BY id DESC LIMIT 1`,
+      )
+      .first();
+  } catch {
+    // 아직 컬럼이 없는 예전 DB — 마감할 것도 없다
+    return null;
+  }
+  if (!quiz) return null;
+  return closeQuizRound(db, quiz, { reason: 'timeup' });
+}
+
 /* ---------------- 화면에 내려 줄 정보 ---------------- */
 
 /** 규칙과 이름표 — 화면이 서버와 같은 값을 읽도록 그대로 내려 준다 */
@@ -324,6 +486,11 @@ export function quizInfo() {
   return {
     ...QUIZ,
     answerTypes: ANSWER_TYPE_KEYS.map((key) => ({ ...ANSWER_TYPES[key] })),
+    modes: QUIZ_MODE_KEYS.map((key) => ({ ...QUIZ_MODES[key] })),
+    defaultMode: DEFAULT_MODE,
+    // 화면은 초 단위를 직접 다루지 않고 여기 이름표를 그대로 쓴다
+    timeLimits: TIME_LIMITS.map((seconds) => ({ seconds, label: formatDuration(seconds) })),
+    defaultTimeLimit: DEFAULT_TIME_LIMIT,
     maxHints: MAX_HINTS,
     hintPenalties: [...HINT_PENALTIES],
     firstScore: FIRST_SCORE,
