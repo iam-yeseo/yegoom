@@ -17,7 +17,7 @@
 
     <h1 class="page-title">
       누적 랭킹
-      <span id="subtitle">점수 합계 순 · 동점이면 정확히 맞힌 횟수, 그다음 평균 오차 순</span>
+      <span id="subtitle">오전 · 오후 · 퀴즈의 점수를 모두 합쳐서 셉니다.</span>
     </h1>
 
     <!-- 세 게임을 합쳐서, 또는 한 게임만 따로 볼 수 있다 -->
@@ -52,8 +52,8 @@
 
   <script type="module">
     import {
-      GAMES, QUIZ, api, avatarOf, escapeHtml, formatShortDate, personChip, renderTabbar,
-      requireLogin, roundLabel, startClock,
+      GAMES, QUIZ, api, avatarOf, escapeHtml, formatShortDate, personChip, playOnce,
+      renderTabbar, requireLogin, revealChildren, roundLabel, setHtml, startClock,
     } from '/js/common.js';
 
     const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
@@ -73,34 +73,41 @@
 
     let scope = '';   // '' 이면 두 게임 합산
 
-    /**
-     * 오전 · 오후 (또는 합산) 한 줄 설명.
-     * 합산일 때는 세는 단위가 다른 둘을 나눠 적는다 — 시간 맞히기는 '회차', 퀴즈는 '판'.
+    /*
+     * 무엇을 크게 보여 줄지가 보기 방식마다 다르다.
+     *
+     *   전체    총점 하나 — 그 아래에 게임별로 얼마씩 벌었는지만 적는다
+     *   게임별  그 게임의 우승 횟수 — 점수와 정확도는 아래 줄로 내린다
+     *
+     * 순위를 매기는 기준은 어느 쪽이든 점수 합계다 (서버가 그렇게 정렬해 내려 준다).
+     * 그래서 게임별로 볼 때도 아래 줄에 점수를 남겨 둔다 — 그게 이 순서의 근거다.
      */
-    function timeMeta(r) {
-      const parts = [];
-      if (r.timePlayed ?? r.played) {
-        parts.push(
-          `${r.timePlayed ?? r.played}회차 참가`,
-          `정확 ${r.exacts}회`,
-          `1등 ${r.wins}회`,
-          `평균 ${r.avgDiffText}`,
-        );
-      }
-      if (!scope && r.quizPlayed) parts.push(`퀴즈 ${r.quizPlayed}판 · 처음 맞힌 ${r.quizFirsts}회`);
-      if (!parts.length) return '아직 참가 기록이 없어요';
-      // 합산으로 볼 때는 게임별 점수도 함께 적어 준다
-      if (!scope) parts.push(`🌅 ${r.morningScore}점 / 🌆 ${r.eveningScore}점 / 🧠 ${r.quizScore}점`);
-      return parts.join(' · ');
+
+    /** 전체 합산 — 어느 게임에서 얼마를 벌었는지 */
+    function totalMeta(r) {
+      return `🌅 ${r.morningScore}점 / 🌆 ${r.eveningScore}점 / 🧠 ${r.quizScore}점`;
     }
 
-    /** 퀴즈만 볼 때의 한 줄 설명 — 시간 맞히기와 세는 것이 다르다 */
+    /** 오전 · 오후 한 게임만 — 그 게임에서 번 점수와 정확도 */
+    function timeMeta(r) {
+      if (!r.played) return '아직 참가 기록이 없어요';
+      return `${r.score}점 · 정확 ${r.exacts}회 · 평균 ${r.avgDiffText}`;
+    }
+
+    /** 퀴즈만 — 시간 맞히기와 세는 것이 다르다 (평균 오차라는 게 없다) */
     function quizMeta(r) {
       if (!r.played) return '아직 참가 기록이 없어요';
-      const parts = [`${r.played}판 참가`, `맞힌 ${r.solved}회`, `가장 먼저 ${r.firsts}회`];
+      const parts = [`${r.score}점`, `맞힌 ${r.solved}회`];
       if (r.made) parts.push(`출제 ${r.made}회`);
       if (r.hintsUsed) parts.push(`힌트 ${r.hintsUsed}회`);
       return parts.join(' · ');
+    }
+
+    /** 오른쪽 큰 숫자 — 전체는 총점, 게임별은 우승 횟수 */
+    function rankValue(r) {
+      if (!scope) return { number: r.score, unit: '점' };
+      // 퀴즈에서 우승은 '가장 먼저 맞힌' 것이다
+      return { number: scope === QUIZ.key ? r.firsts : r.wins, unit: '회' };
     }
 
     function renderRanking(ranking) {
@@ -109,7 +116,8 @@
       return ranking
         .map((r) => {
           const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
-          const meta = scope === QUIZ.key ? quizMeta(r) : timeMeta(r);
+          const meta = !scope ? totalMeta(r) : scope === QUIZ.key ? quizMeta(r) : timeMeta(r);
+          const value = rankValue(r);
           return `<div class="rank">
             <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
             <div class="rank__avatar" aria-hidden="true">${avatarOf(r)}</div>
@@ -117,7 +125,7 @@
               <div class="rank__name">${escapeHtml(r.displayName)} ${me}</div>
               <div class="rank__meta">${escapeHtml(meta)}</div>
             </div>
-            <div class="rank__wins"><b>${r.score}</b><span>점</span></div>
+            <div class="rank__wins"><b>${value.number}</b><span>${value.unit}</span></div>
           </div>`;
         })
         .join('');
@@ -199,9 +207,9 @@
 
       el.rankingLabel.textContent = game ? `순위 · ${game.label}` : '순위 · 세 게임 합산';
       el.subtitle.textContent = isQuiz
-        ? '점수 합계 순 · 동점이면 가장 먼저 맞힌 횟수, 그다음 맞힌 횟수 순'
+        ? '가장 먼저 맞힌 횟수를 보여 줍니다. 순위는 점수 합계 순이에요.'
         : game
-          ? `${game.title} 기록만 셉니다. 이 게임의 출제자는 빠져요.`
+          ? `${game.title} 기록만 셉니다. 1등 횟수를 보여 주고, 순위는 점수 합계 순이에요.`
           : '오전 · 오후 · 퀴즈의 점수를 모두 합쳐서 셉니다.';
 
       el.historyLabel.textContent = isQuiz
@@ -217,12 +225,12 @@
           api(`/api/ranking${query}`),
           api(historyPath),
         ]);
-        el.ranking.innerHTML = renderRanking(ranking);
-        el.history.innerHTML = isQuiz ? renderQuizHistory(history) : renderHistory(history);
+        setHtml(el.ranking, renderRanking(ranking));
+        setHtml(el.history, isQuiz ? renderQuizHistory(history) : renderHistory(history));
       } catch (err) {
         const msg = `<p class="muted center">불러오지 못했습니다.<br />${escapeHtml(err.message)}</p>`;
-        el.ranking.innerHTML = msg;
-        el.history.innerHTML = msg;
+        setHtml(el.ranking, msg);
+        setHtml(el.history, msg);
       }
     }
 
@@ -233,10 +241,13 @@
       for (const item of el.scope.querySelectorAll('[data-scope]')) {
         item.setAttribute('aria-selected', String(item.dataset.scope === scope));
       }
+      playOnce(btn, 'is-picked');
       load();
     });
 
     await load();
+    // 첫 화면만 위 칸부터 차례로 올라온다
+    revealChildren(document.querySelector('.app'));
   </script>
 </body>
 </html>

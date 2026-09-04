@@ -19,10 +19,14 @@
 //
 // 눌러서 벌어진 일은 화면 아래 토스트로 알린다. 화면 맨 위에 붙는 안내문은
 // 스크롤을 조금만 내려도 보이지 않아서, 답을 낸 결과를 놓치기 쉬웠다.
+//
+// 화면은 15초마다 통째로 다시 그린다. 그래서 칸을 여닫을 때는 setHidden 을,
+// 목록을 채울 때는 setHtml 을 쓴다 — 둘 다 정말 달라졌을 때만 손대므로
+// 등장 애니메이션이 15초마다 다시 도는 일이 없다.
 
 import {
-  QUIZ, api, avatarOf, escapeHtml, personChip, renderTabbar, requireLogin, roundLabel,
-  startClock,
+  QUIZ, api, avatarOf, escapeHtml, personChip, playOnce, renderTabbar, requireLogin,
+  revealChildren, roundLabel, setHidden, setHtml, startClock,
 } from '/js/common.js';
 import { confirmDialog, showToast } from '/js/ui.js';
 import { shrinkPhoto } from '/js/photo-picker.js';
@@ -222,6 +226,10 @@ const el = Object.fromEntries(
   ].map((id) => [id.replace(/-(.)/g, (_, c) => c.toUpperCase()), document.getElementById(id)]),
 );
 
+// 문제 사진은 다 받은 뒤에 드러난다 (.quiz-photo 는 기본이 opacity 0)
+el.questionPhoto.addEventListener('load', () => el.questionPhoto.classList.add('is-loaded'));
+el.questionPhoto.addEventListener('error', () => el.questionPhoto.classList.add('is-loaded'));
+
 startClock();
 const user = await requireLogin();
 renderTabbar(user);
@@ -239,12 +247,15 @@ async function run(button, busyText, work) {
   const label = button.textContent;
   button.disabled = true;
   button.textContent = busyText;
+  // 서버를 기다리는 동안 버튼 위로 빛이 한 번씩 지나간다 (멈춰 있는 게 아니라는 표시)
+  button.classList.add('btn--busy');
   try {
     await work();
     await load();
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
+    button.classList.remove('btn--busy');
     button.disabled = false;
     button.textContent = label;
   }
@@ -255,8 +266,9 @@ async function run(button, busyText, work) {
 /** OX 문제는 버튼 두 개로, 나머지는 입력칸으로 받는다. */
 function setupAnswerInput({ type, input, wrap, ox, placeholder }) {
   const isOx = type === 'ox';
-  wrap.classList.toggle('hidden', isOx);
-  ox.classList.toggle('hidden', !isOx);
+  // 정답 종류를 바꾸면 입력칸과 OX 버튼이 서로 자리를 바꾼다 — 바뀔 때만 움직인다
+  setHidden(wrap, isOx);
+  setHidden(ox, !isOx);
   if (isOx) return;
 
   input.placeholder = placeholder ?? '정답 입력';
@@ -276,6 +288,7 @@ function bindOx(box) {
     for (const b of box.querySelectorAll('[data-ox]')) {
       b.setAttribute('aria-pressed', String(b === btn));
     }
+    playOnce(btn, 'is-picked');
   });
 }
 
@@ -289,6 +302,7 @@ el.modePick.addEventListener('click', (e) => {
   if (!btn) return;
   composeMode = btn.dataset.mode;
   renderComposeMode();
+  playOnce(btn, 'is-picked');
 });
 
 el.timePick.addEventListener('click', (e) => {
@@ -296,6 +310,7 @@ el.timePick.addEventListener('click', (e) => {
   if (!btn) return;
   composeTimeLimit = Number(btn.dataset.seconds);
   renderComposeMode();
+  playOnce(btn, 'is-picked');
 });
 
 /** 고른 방식에 맞춰 버튼 선택 상태 · 제한시간 칩 · 안내문을 맞춘다. */
@@ -311,7 +326,7 @@ function renderComposeMode() {
 
   // 제한시간 칩은 '제한시간' 방식일 때만 나온다
   const timed = !!picked?.timed;
-  el.timePick.classList.toggle('hidden', !timed);
+  setHidden(el.timePick, !timed);
   if (timed) {
     composeTimeLimit ??= game?.defaultTimeLimit ?? null;
     for (const btn of el.timePick.querySelectorAll('[data-seconds]')) {
@@ -338,6 +353,7 @@ el.typePick.addEventListener('click', (e) => {
   if (!btn) return;
   composeType = btn.dataset.type;
   renderComposeType();
+  playOnce(btn, 'is-picked');
 });
 
 function renderComposeType() {
@@ -378,10 +394,10 @@ el.cPhotoClear.addEventListener('click', () => {
 });
 
 function renderComposePhoto() {
-  el.cPhotoPreview.innerHTML = composePhoto
+  setHtml(el.cPhotoPreview, composePhoto
     ? `<img src="${composePhoto}" alt="" />`
-    : '🖼️';
-  el.cPhotoClear.classList.toggle('hidden', !composePhoto);
+    : '🖼️');
+  setHidden(el.cPhotoClear, !composePhoto);
   el.cPhotoPick.textContent = composePhoto ? '다른 사진으로' : '사진 넣기 (선택)';
 }
 
@@ -568,12 +584,12 @@ function renderRules(game) {
     .map((p, i) => `${i + 1}단계 −${p}점`)
     .join(' · ');
 
-  el.rules.innerHTML = [
+  setHtml(el.rules, [
     `<li><b>+${game.firstScore}점</b> 가장 먼저 맞힌 사람</li>`,
     `<li><b>+${game.nextScore}점</b> 그다음부터 맞힌 사람</li>`,
     `<li><b>−힌트</b> ${escapeHtml(penalties)} (쓴 만큼 더해서 깎여요)</li>`,
     `<li><b>−${game.wrongPenalty}점</b> 오답 한 번마다</li>`,
-  ].join('');
+  ].join(''));
 
   el.rulesNote.textContent =
     '가장 먼저 정답을 낸 사람이 다음 출제자가 돼요. 점수는 맞히는 순간 확정되고, ' +
@@ -584,8 +600,8 @@ function renderRules(game) {
 /** 출제 차례 안내 */
 function renderTurn(state) {
   const { turn, quiz } = state;
-  el.turnBox.classList.remove('hidden');
-  el.turnAvatar.innerHTML = turn ? avatarOf(turn) : '🙂';
+  setHidden(el.turnBox, false);
+  setHtml(el.turnAvatar, turn ? avatarOf(turn) : '🙂');
   el.turnName.textContent = turn?.displayName ?? '출제자 없음';
 
   if (!turn) {
@@ -604,15 +620,17 @@ function renderTurn(state) {
 /** 문제 카드 */
 function renderQuestion(state) {
   const { quiz } = state;
-  el.questionBox.classList.toggle('hidden', !quiz);
+  setHidden(el.questionBox, !quiz);
   if (!quiz) return;
 
   el.questionLabel.textContent = quiz.closed
     ? `${roundLabel(quiz.roundNo)} 문제 (끝남)`
     : `${roundLabel(quiz.roundNo)} 문제`;
 
-  el.questionPhoto.classList.toggle('hidden', !quiz.photoUrl);
+  setHidden(el.questionPhoto, !quiz.photoUrl);
   if (quiz.photoUrl && el.questionPhoto.getAttribute('src') !== quiz.photoUrl) {
+    // 다 받아오기 전에는 빈 칸이 덜컥 나타나므로, 받은 뒤에 부드럽게 띄운다
+    el.questionPhoto.classList.remove('is-loaded');
     el.questionPhoto.src = quiz.photoUrl;
   }
 
@@ -642,8 +660,10 @@ function closedReasonNote(quiz) {
 
 /* ---------------- 남은 시간 ---------------- */
 
-/** 이만큼 남으면 남은 시간 칸이 빨갛게 바뀌고 초마다 한 번씩 뛴다 */
+/** 이만큼 남으면 남은 시간 칸이 빨갛게 바뀐다 */
 const SOON_SECONDS = 30;
+/** 이만큼 남으면 숫자가 초마다 한 번씩 뛴다 */
+const COUNT_SECONDS = 10;
 
 /** 제한시간 문제의 마감 시각 (브라우저 시각 기준). 제한시간이 없으면 null */
 let deadlineAt = null;
@@ -670,7 +690,7 @@ function clockText(seconds) {
 function renderTimer(state) {
   const { quiz } = state;
   const on = !!quiz && !quiz.closed && quiz.mode === 'timed' && quiz.secondsLeft !== null;
-  el.questionTimer.classList.toggle('hidden', !on);
+  setHidden(el.questionTimer, !on);
 
   if (!on) {
     deadlineAt = null;
@@ -686,7 +706,12 @@ function tickTimer() {
   if (deadlineAt === null) return;
 
   const left = Math.max(0, Math.round((deadlineAt - Date.now()) / 1000));
-  el.questionTimerValue.textContent = left ? clockText(left) : '종료';
+  const text = left ? clockText(left) : '종료';
+  // 마지막 10초만 숫자가 초마다 한 번씩 뛴다. 30분짜리 퀴즈 내내 뛰면 방해만 된다.
+  if (text !== el.questionTimerValue.textContent) {
+    el.questionTimerValue.textContent = text;
+    if (left > 0 && left <= COUNT_SECONDS) playOnce(el.questionTimerValue, 'is-ticking');
+  }
   el.questionTimer.classList.toggle('quiz-timer--soon', left > 0 && left <= SOON_SECONDS);
   el.questionTimer.classList.toggle('quiz-timer--over', left === 0);
 
@@ -707,7 +732,7 @@ setInterval(tickTimer, 1000);
 function renderAnswer(state) {
   const { quiz, me } = state;
   const show = !!quiz?.closed;
-  el.answerBox.classList.toggle('hidden', !show);
+  setHidden(el.answerBox, !show);
   if (!show) return;
 
   el.answerText.textContent = quiz.answer ?? '—';
@@ -725,14 +750,14 @@ function renderPlay(state) {
   const { quiz, me } = state;
   // 진행 중인 퀴즈에 참가할 수 있는 사람에게만 보인다 (출제자와 운영자는 제외)
   const on = !!quiz && !quiz.closed && !!me?.isPlayer && !me.isSetter;
-  el.playBox.classList.toggle('hidden', !on);
+  setHidden(el.playBox, !on);
   if (!on) return;
 
   // 이미 맞힌 사람에게는 입력칸 대신 받은 점수를 보여 준다
   const done = me.solved;
-  el.playInputWrap.classList.toggle('hidden', done);
-  el.playOx.classList.toggle('hidden', done);
-  el.playSubmit.classList.toggle('hidden', done);
+  setHidden(el.playInputWrap, done);
+  setHidden(el.playOx, done);
+  setHidden(el.playSubmit, done);
   if (done) {
     el.playScore.textContent = `${me.rank}번째로 맞혔어요 · +${me.score}점`;
     el.playScoreNote.textContent = me.rank === 1
@@ -740,7 +765,7 @@ function renderPlay(state) {
       : quiz.mode === 'timed'
         ? '제한시간이 끝나면 정답이 공개돼요.'
         : '출제자가 퀴즈를 끝내면 정답이 공개돼요.';
-    el.playLog.innerHTML = '';
+    setHtml(el.playLog, '');
     return;
   }
 
@@ -764,12 +789,12 @@ function renderPlay(state) {
 
   // 내가 낸 답은 나에게만 보인다
   const wrong = (me.attemptLog ?? []).filter((a) => !a.correct);
-  el.playLog.innerHTML = wrong.length
+  setHtml(el.playLog, wrong.length
     ? `<div class="attempt-log">${wrong
         .map((a) => `<span class="attempt">${escapeHtml(a.answer)}</span>`)
         .join('')}</div>
        <p class="muted" style="font-size: 13px; margin: 8px 0 0">내가 낸 오답이에요 (나만 보여요).</p>`
-    : '';
+    : '');
 }
 
 function hintPenaltyOf(game, used) {
@@ -784,11 +809,11 @@ function renderHints(state) {
   const on =
     !!quiz && !quiz.closed && !me?.isSetter && me?.isPlayer && quiz.hintCount > 0 &&
     (me.canHint || (me.hints ?? []).length > 0);
-  el.hintBox.classList.toggle('hidden', !on);
+  setHidden(el.hintBox, !on);
   if (!on) return;
 
   const opened = me.hints ?? [];
-  el.hintList.innerHTML = opened.length
+  setHtml(el.hintList, opened.length
     ? opened
         .map(
           (h, i) => `<div class="hint-row">
@@ -797,9 +822,9 @@ function renderHints(state) {
           </div>`,
         )
         .join('')
-    : '<p class="muted" style="margin: 0">아직 연 힌트가 없어요.</p>';
+    : '<p class="muted" style="margin: 0">아직 연 힌트가 없어요.</p>');
 
-  el.hintOpen.classList.toggle('hidden', !me.canHint);
+  setHidden(el.hintOpen, !me.canHint);
   el.hintOpen.textContent = me.nextHintPenalty
     ? `${me.hintsUsed + 1}단계 힌트 열기 (−${me.nextHintPenalty}점)`
     : '힌트 열기';
@@ -815,11 +840,11 @@ function renderHints(state) {
 function renderSetter(state) {
   const { quiz, me, players } = state;
   const on = !!quiz && !quiz.closed && !!me?.isSetter;
-  el.setterBox.classList.toggle('hidden', !on);
+  setHidden(el.setterBox, !on);
   if (!on) return;
 
   el.setterAnswer.textContent = quiz.answer ?? '—';
-  el.setterHints.innerHTML = (quiz.hints ?? []).length
+  setHtml(el.setterHints, (quiz.hints ?? []).length
     ? `<div class="card__label" style="margin-top: 16px">내가 넣은 힌트</div>${(quiz.hints ?? [])
         .map(
           (h, i) => `<div class="hint-row">
@@ -828,11 +853,11 @@ function renderSetter(state) {
           </div>`,
         )
         .join('')}`
-    : '<p class="muted" style="font-size: 13px; margin: 14px 0 0">힌트 없이 낸 문제예요.</p>';
+    : '<p class="muted" style="font-size: 13px; margin: 14px 0 0">힌트 없이 낸 문제예요.</p>');
 
   // 아무도 손대지 않았을 때만 문제를 통째로 지울 수 있다
   const untouched = !players.some((p) => p.attempts > 0 || p.hintsUsed > 0);
-  el.dropQuiz.classList.toggle('hidden', !untouched);
+  setHidden(el.dropQuiz, !untouched);
 
   // 선착순·제한시간 문제는 서버가 알아서 끝내므로, 버튼은 '먼저 끝내기' 가 된다
   el.closeQuiz.textContent = quiz.mode === 'free' ? '퀴즈 종료하기' : '지금 바로 끝내기';
@@ -851,8 +876,8 @@ function renderSetter(state) {
 /** 출제 폼 · 턴 넘기기 */
 function renderCompose(state) {
   const on = !!state.canSet;
-  el.composeBox.classList.toggle('hidden', !on);
-  el.passBox.classList.toggle('hidden', !on);
+  setHidden(el.composeBox, !on);
+  setHidden(el.passBox, !on);
   if (!on) return;
 
   // 진행 방식과 제한시간 목록도 서버가 내려 준 그대로 만든다
@@ -903,7 +928,7 @@ function renderCompose(state) {
 
   // 턴 넘기기 목록 — 나를 뺀 플레이어 전원
   const others = state.players.filter((p) => !p.isMe);
-  el.passList.innerHTML = others.length
+  setHtml(el.passList, others.length
     ? others
         .map(
           (p) => `<div class="player">
@@ -917,7 +942,7 @@ function renderCompose(state) {
           </div>`,
         )
         .join('')
-    : '<p class="muted center" style="margin: 0">넘길 사람이 없어요.</p>';
+    : '<p class="muted center" style="margin: 0">넘길 사람이 없어요.</p>');
 }
 
 /** 참가자 목록 */
@@ -926,7 +951,7 @@ function renderPlayers(state) {
   const medal = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
   el.playersLabel.textContent = quiz?.closed ? '결과' : '참가자';
-  el.players.innerHTML = state.players.length
+  setHtml(el.players, state.players.length
     ? state.players
         .map((p) => {
           const winner = p.rank === 1;
@@ -967,7 +992,7 @@ function renderPlayers(state) {
           </div>`;
         })
         .join('')
-    : '<p class="muted center">참가할 사람이 없어요.</p>';
+    : '<p class="muted center">참가할 사람이 없어요.</p>');
 }
 
 async function load() {
@@ -985,13 +1010,13 @@ async function load() {
   if (!state.turn && !quiz) {
     el.subtitle.textContent = '운영자가 출제자를 지정하면 시작돼요';
   } else if (quiz && !quiz.closed) {
-    el.subtitle.innerHTML = `${personChip(quiz.setter)} 님의 문제 · ${quiz.modeIcon} ${
+    setHtml(el.subtitle, `${personChip(quiz.setter)} 님의 문제 · ${quiz.modeIcon} ${
       escapeHtml(quiz.modeLabel)
-    } · ${quiz.solvedCount}명이 맞혔어요`;
+    } · ${quiz.solvedCount}명이 맞혔어요`);
   } else if (state.isTurnHolder) {
     el.subtitle.textContent = '내가 다음 문제를 낼 차례예요';
   } else {
-    el.subtitle.innerHTML = `${personChip(state.turn)} 님이 다음 문제를 준비 중`;
+    setHtml(el.subtitle, `${personChip(state.turn)} 님이 다음 문제를 준비 중`);
   }
 
   renderTurn(state);
@@ -1007,17 +1032,19 @@ async function load() {
 
   // 운영자는 구경만 한다
   if (user.role === 'admin' && !state.canSet) {
-    el.playBox.classList.add('hidden');
-    el.hintBox.classList.add('hidden');
+    setHidden(el.playBox, true);
+    setHidden(el.hintBox, true);
   }
 }
 
 try {
   await load();
+  // 첫 화면만 위 칸부터 차례로 올라온다 (그 뒤의 등장은 setHidden 이 맡는다)
+  revealChildren(document.querySelector('[data-app]'));
 } catch (err) {
   showToast(`불러오지 못했습니다: ${err.message}`, 'error');
   el.subtitle.textContent = '연결을 확인해 주세요';
-  el.players.innerHTML = '<p class="muted center">잠시 후 다시 시도합니다.</p>';
+  setHtml(el.players, '<p class="muted center">잠시 후 다시 시도합니다.</p>');
 }
 
 // 남이 맞혔는지, 다음 문제가 나왔는지 주기적으로 확인한다.

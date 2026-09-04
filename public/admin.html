@@ -53,8 +53,8 @@
 
   <script type="module">
     import {
-      GAMES, QUIZ, api, avatarOf, escapeHtml, renderTabbar, requireLogin, roundLabel,
-      startClock,
+      GAMES, QUIZ, api, avatarOf, escapeHtml, renderTabbar, requireLogin, revealChildren,
+      roundLabel, setHtml, startClock,
     } from '/js/common.js';
     import { confirmDialog, showToast } from '/js/ui.js';
 
@@ -237,8 +237,8 @@
         Promise.all(Object.keys(GAMES).map((key) => api(`/api/today?game=${key}`))),
         api('/api/quiz'),
       ]);
-      el.games.innerHTML = states.map(gameCard).join('');
-      el.quiz.innerHTML = quizCard(quizState);
+      setHtml(el.games, states.map(gameCard).join(''));
+      setHtml(el.quiz, quizCard(quizState));
     }
 
     el.games.addEventListener('click', async (e) => {
@@ -268,10 +268,12 @@
 
     try {
       await load();
+      // 첫 화면만 위 칸부터 차례로 올라온다
+      revealChildren(document.querySelector('.app'));
     } catch (err) {
       showToast(`불러오지 못했습니다: ${err.message}`, 'error');
-      el.games.innerHTML = '<p class="muted center">잠시 후 다시 시도해 주세요.</p>';
-      el.quiz.innerHTML = '';
+      setHtml(el.games, '<p class="muted center">잠시 후 다시 시도해 주세요.</p>');
+      setHtml(el.quiz, '');
     }
   </script>
 </body>
