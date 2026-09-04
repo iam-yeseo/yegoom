@@ -12,12 +12,13 @@
 // 진행 방식에 따라 이 답이 퀴즈를 끝낼 수도 있다.
 //   first  맞히는 순간 퀴즈가 끝난다 (선착순 한 명)
 //   timed  제한시간이 지났으면 답을 받지 않고 그 자리에서 마감한다
-//   free   여기서는 아무것도 끝나지 않는다 — 출제자가 끝낸다
+//   free   첫 정답이 나오면 그때부터 15분을 재기 시작한다 (그 뒤로는 시간이 끝낸다)
 
 import { fail, json, readJson, requireUser } from '../lib/util.js';
 import {
-  FIRST_SCORE, NEXT_SCORE, WRONG_PENALTY, closeQuizRound, formatDuration, hintPenalty,
-  isCorrectAnswer, modeOf, normalizeSubmission, openQuiz, personById, scoreFor, settleExpiredQuiz,
+  FIRST_SCORE, FREE_GRACE_SECONDS, NEXT_SCORE, WRONG_PENALTY, answerFormOf, closeQuizRound,
+  formatDuration, hintPenalty, isCorrectAnswer, modeOf, normalizeSubmission, openQuiz, personById,
+  scoreFor, settleExpiredQuiz,
 } from '../lib/quiz.js';
 
 export async function onRequestPost(context) {
@@ -37,7 +38,11 @@ export async function onRequestPost(context) {
   const mode = modeOf(quiz);
 
   const body = await readJson(context.request);
-  const submitted = normalizeSubmission(body.answer);
+  // 날짜 · 시간 · 금액은 출제자가 정해 둔 칸 모양에 맞춰 받는다
+  const submitted = normalizeSubmission(body.answer, {
+    type: quiz.answer_type,
+    form: answerFormOf(quiz.answer_type, quiz.answer_text),
+  });
   if (submitted.error) return fail(400, submitted.error);
 
   const mine = await db
@@ -121,6 +126,19 @@ export async function onRequestPost(context) {
   if (correct) {
     // 선착순 문제는 이 답으로 끝난다 — 정답이 공개되고 출제 턴이 나에게 넘어온다
     const finished = mode.key === 'first' ? await closeQuizRound(db, quiz, { reason: 'first' }) : null;
+
+    // 자유 모드는 첫 정답이 나온 순간부터 15분을 잰다. 마감 시각을 서버 시계로 한 번만
+    // 박아 두면(아직 비어 있을 때만) 그 뒤에는 제한시간 문제와 똑같이 흘러간다.
+    if (mode.key === 'free' && row?.solved_rank === 1) {
+      await db
+        .prepare(
+          `UPDATE quiz_rounds
+              SET deadline_at = datetime('now', '+' || ? || ' seconds')
+            WHERE id = ? AND status = 'open' AND deadline_at IS NULL`,
+        )
+        .bind(FREE_GRACE_SECONDS, quiz.id)
+        .run();
+    }
 
     return json({
       ok: true,

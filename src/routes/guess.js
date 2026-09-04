@@ -29,7 +29,7 @@ export async function onRequestPost(context) {
 
   if (isClosed(game.key, gameDate)) {
     await closeExpiredRounds(db);
-    return fail(409, `${game.closeLabel} 이 지나 오늘 ${game.label}은 마감됐어요.`);
+    return fail(409, `${game.closeLabel} 이 지나 오늘 ${game.label}는 마감됐어요.`);
   }
 
   const round = await db.prepare(`SELECT status FROM rounds WHERE game = ? AND game_date = ?`)
@@ -37,7 +37,7 @@ export async function onRequestPost(context) {
   if (round?.status === 'settled') {
     return fail(409, '이미 정답이 공개되어 예측을 바꿀 수 없습니다.');
   }
-  if (round?.status === 'void') return fail(409, `오늘 ${game.label}은 마감됐어요.`);
+  if (round?.status === 'void') return fail(409, `오늘 ${game.label}는 마감됐어요.`);
 
   await db
     .prepare(

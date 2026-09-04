@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0d1020" />
   <meta name="robots" content="noindex" />
-  <title>초기 설정 · 기상 · 퇴근시간 맞히기</title>
+  <title>초기 설정 · 예굼방 아케이드 🎮</title>
   <link rel="stylesheet" href="/css/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
 </head>
@@ -157,9 +157,9 @@
             .join('');
 
           return `<div style="margin-bottom: 18px">
-            <div class="card__label">${game.icon} ${escapeHtml(game.label)} · ${escapeHtml(
-              game.title,
-            )}</div>
+            <div class="card__label">${game.icon} ${escapeHtml(game.label)}${
+              game.title && game.title !== game.label ? ` · ${escapeHtml(game.title)}` : ''
+            }</div>
             ${rows}
           </div>`;
         })

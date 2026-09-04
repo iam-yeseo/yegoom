@@ -25,6 +25,22 @@ export async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+/* ---------------- 앱 이름 ---------------- */
+
+/**
+ * 앱 이름과 한 줄 소개. 탭 제목 · 로그인 화면 · 첫 화면이 모두 여기를 읽는다.
+ * 정적 HTML 의 <title> 은 스크립트를 기다리지 않도록 같은 값을 직접 적어 둔다.
+ */
+export const APP = {
+  name: '예굼방 아케이드 🎮',
+  tagline: '도파민에 중독된 사람들을 위한 최고의 선택',
+};
+
+/** 브라우저 탭에 걸 제목 — "{화면 이름} · {앱 이름}" */
+export function pageTitle(name) {
+  return name ? `${name} · ${APP.name}` : APP.name;
+}
+
 /* ---------------- 시간 표시 (KST 고정) ---------------- */
 
 const dateFmt = new Intl.DateTimeFormat('ko-KR', {
@@ -85,7 +101,7 @@ export function formatShortDate(iso) {
 export const GAMES = {
   morning: {
     key: 'morning',
-    label: '오전 게임',
+    label: '기상시간 맞히기',
     short: '오전',
     icon: '🌅',
     title: '기상시간 맞히기',
@@ -94,7 +110,7 @@ export const GAMES = {
   },
   evening: {
     key: 'evening',
-    label: '오후 게임',
+    label: '퇴근시간 맞히기',
     short: '오후',
     icon: '🌆',
     title: '퇴근시간 맞히기',
@@ -113,7 +129,8 @@ export const QUIZ = {
   label: '예굼퀴즈대회',
   short: '퀴즈',
   icon: '🧠',
-  title: '문제 내고 맞히기',
+  title: '문제를 내고 맞혀봐요',
+  subject: '퀴즈',
   path: '/quiz',
 };
 

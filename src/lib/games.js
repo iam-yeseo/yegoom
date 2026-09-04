@@ -27,7 +27,7 @@ export const GAME_KEYS = ['morning', 'evening'];
 export const GAMES = {
   morning: {
     key: 'morning',
-    label: '오전 게임',
+    label: '기상시간 맞히기',
     short: '오전',
     icon: '🌅',
     title: '기상시간 맞히기',
@@ -65,7 +65,7 @@ export const GAMES = {
   },
   evening: {
     key: 'evening',
-    label: '오후 게임',
+    label: '퇴근시간 맞히기',
     short: '오후',
     icon: '🌆',
     title: '퇴근시간 맞히기',
@@ -85,7 +85,7 @@ export const GAMES = {
     ],
     // 'time' 은 출제자가 시간을 직접 적어 둔다
     answerMode: 'time',
-    answerButton: '정답 기록하기',
+    answerButton: '퇴근시간 기록하기',
     // 기회 — 운영자가 /setup 에서 바꾸기 전까지의 기본값
     useChances: true,
     defaultChances: 2,

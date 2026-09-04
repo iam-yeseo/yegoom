@@ -153,7 +153,9 @@ export const SCHEMA_STATEMENTS = [
    )`,
 
   // 퀴즈 한 판. 한 번에 하나만 'open' 이고, 끝나면 'closed' 가 된다.
-  //   answer_type    'number' 숫자만 · 'text' 텍스트 · 'ox' OX
+  //   answer_type    한 칸으로 받는 것  'number' 숫자만 · 'text' 텍스트 · 'ox' OX
+  //                  칸을 나눠 받는 것  'date' 날짜 · 'duration' 시간 · 'money' 금액
+  //                  (칸 구성은 저장해 둔 정답에서 다시 읽는다 — src/lib/quiz.js 의 answerFormOf)
   //   answer_text    출제자가 적은 그대로. 쉼표로 나눈 여러 정답을 모두 인정한다.
   //   hint1~3        단계별 힌트. 비워 두면 그 단계는 없다.
   //   has_photo      사진 한 장을 넣었는지 (사진 자체는 quiz_photos 에 있다)
@@ -172,7 +174,9 @@ export const SCHEMA_STATEMENTS = [
      id             INTEGER PRIMARY KEY AUTOINCREMENT,
      round_no       INTEGER,
      setter_user_id INTEGER REFERENCES users(id),
-     answer_type    TEXT    NOT NULL CHECK (answer_type IN ('number', 'text', 'ox')),
+     answer_type    TEXT    NOT NULL
+                            CHECK (answer_type IN ('number', 'text', 'ox',
+                                                   'date', 'duration', 'money')),
      mode           TEXT    NOT NULL DEFAULT 'free'
                             CHECK (mode IN ('free', 'first', 'timed')),
      time_limit_sec INTEGER,
