@@ -5,11 +5,19 @@
 //
 // 정답을 기록하는 쪽은 운영자가 아니라 출제자다. 기록해 둔 정답과 "기록했는지
 // 여부" 는 출제자 본인에게만 보이고, 다른 사람 화면에는 흔적조차 남지 않는다.
+//
+// 되돌리기 어려운 일은 앱 톤에 맞춘 확인 창으로 한 번 묻고, 결과는 화면 아래
+// 토스트로 알린다 (public/js/ui.js). 화면 맨 위 안내문은 스크롤하면 놓치기 쉽다.
+//
+// 화면은 주기적으로 통째로 다시 그린다. 칸을 여닫을 때는 setHidden 을, 목록을
+// 채울 때는 setHtml 을 쓴다 — 둘 다 정말 달라졌을 때만 손대므로 등장
+// 애니메이션이 갱신 때마다 다시 돌지 않는다.
 
 import {
-  GAMES, api, avatarOf, escapeHtml, personChip, renderTabbar, requireLogin, roundLabel,
-  showMessage, startClock,
+  GAMES, api, avatarOf, escapeHtml, personChip, renderTabbar, requireLogin, revealChildren,
+  roundLabel, setHidden, setHtml, startClock,
 } from '/js/common.js';
+import { confirmDialog, showToast } from '/js/ui.js';
 import { createTimeInput } from '/js/time-input.js';
 
 const gameKey = document.body.dataset.game === 'morning' ? 'morning' : 'evening';
@@ -35,8 +43,6 @@ document.querySelector('[data-app]').innerHTML = `
     <span id="title-text" class="page-title__main">오늘의 ${GAME.subject}</span>
     <span id="subtitle">불러오는 중…</span>
   </h1>
-
-  <p id="msg" class="msg hidden" role="status"></p>
 
   <section id="answer-box" class="answer hidden">
     <div class="answer__label">오늘의 정답</div>
@@ -136,7 +142,7 @@ document.querySelector('[data-app]').innerHTML = `
 
 const el = Object.fromEntries(
   [
-    'round-badge', 'round-note', 'title-text', 'subtitle', 'msg',
+    'round-badge', 'round-note', 'title-text', 'subtitle',
     'answer-box', 'answer-time', 'answer-note', 'closed-box', 'closed-text',
     'guess-box', 'guess-submit', 'guess-hint', 'chips',
     'setter-box', 'setter-label', 'setter-avatar', 'setter-name', 'setter-hint',
@@ -187,67 +193,83 @@ async function run(button, busyText, work) {
   const label = button.textContent;
   button.disabled = true;
   button.textContent = busyText;
-  showMessage(el.msg, '');
+  // 서버를 기다리는 동안 버튼 위로 빛이 한 번씩 지나간다 (멈춰 있는 게 아니라는 표시)
+  button.classList.add('btn--busy');
   try {
     await work();
     await load();
   } catch (err) {
-    showMessage(el.msg, err.message);
+    showToast(err.message, 'error');
     button.textContent = label;
   } finally {
+    button.classList.remove('btn--busy');
     button.disabled = false;
   }
 }
 
 el.guessSubmit.addEventListener('click', () => {
   const time = guessInput.value;
-  if (!time) return showMessage(el.msg, '예측할 시간을 입력해 주세요.');
+  if (!time) return showToast('예측할 시간을 입력해 주세요.', 'error');
   return run(el.guessSubmit, '확정 중…', async () => {
     const res = await api('/api/guess', { method: 'POST', body: { game: gameKey, time } });
-    showMessage(el.msg, `${res.guess} 로 확정했어요.`, 'ok');
+    showToast(`${res.guess} 로 확정했어요.`, 'ok');
   });
 });
 
-el.record.addEventListener('click', () => {
+el.record.addEventListener('click', async () => {
   const isButton = GAME.key === 'morning';
   const time = isButton ? null : answerInput.value;
-  if (!isButton && !time) return showMessage(el.msg, '정답 시간을 입력해 주세요.');
+  if (!isButton && !time) return showToast('정답 시간을 입력해 주세요.', 'error');
 
-  const ask = isButton
-    ? '지금 시각을 오늘의 기상 시각으로 기록할까요?'
-    : `오늘의 정답을 ${time} 로 기록할까요?`;
-  if (!confirm(`${ask}\n\n기록한 사실은 아무에게도 보이지 않아요.`)) return;
+  const ok = await confirmDialog({
+    icon: GAME.icon,
+    title: isButton ? '지금 시각으로 기록할까요?' : '오늘의 정답을 기록할까요?',
+    message: '기록한 사실은 아무에게도 보이지 않아요. 공개 전까지 나만 볼 수 있어요.',
+    detail: isButton ? '' : `${GAME.subject} ${time}`,
+    confirmText: '기록하기',
+  });
+  if (!ok) return;
 
   return run(el.record, '기록 중…', async () => {
     const res = await api('/api/answer', {
       method: 'POST',
       body: time ? { game: gameKey, time } : { game: gameKey },
     });
-    showMessage(el.msg, `${res.answer} 로 기록했어요. 나만 볼 수 있어요.`, 'ok');
+    showToast(`${res.answer} 로 기록했어요. 나만 볼 수 있어요.`, 'ok');
   });
 });
 
-el.recordClear.addEventListener('click', () => {
-  if (!confirm('기록해 둔 정답을 지울까요?')) return;
+el.recordClear.addEventListener('click', async () => {
+  const ok = await confirmDialog({
+    icon: '🗑️',
+    title: '기록해 둔 정답을 지울까요?',
+    message: '지우고 나면 다시 기록할 수 있어요.',
+    confirmText: '지우기',
+    tone: 'danger',
+  });
+  if (!ok) return;
+
   return run(el.recordClear, '지우는 중…', async () => {
     await api(`/api/answer?game=${gameKey}`, { method: 'DELETE' });
-    showMessage(el.msg, '기록을 지웠어요.', 'ok');
+    showToast('기록을 지웠어요.', 'ok');
   });
 });
 
-el.burn.addEventListener('click', () => {
+el.burn.addEventListener('click', async () => {
   const left = current?.chances?.remaining ?? 0;
-  const ask = left > 1
-    ? `기회를 한 번 쓸까요? 쓰고 나면 ${left - 1}번 남아요.`
-    : '마지막 기회를 쓸까요? 쓰고 나면 정답을 공개할 수 있어요.';
-  if (!confirm(`${ask}\n\n지금 예측 중 정답에 가장 가까운 사람에게 하이라이트가 들어갑니다.`)) {
-    return;
-  }
+
+  const ok = await confirmDialog({
+    icon: '🔦',
+    title: left > 1 ? '기회를 한 번 쓸까요?' : '마지막 기회를 쓸까요?',
+    message: '지금 예측 중 정답에 가장 가까운 사람에게 하이라이트가 들어가요.',
+    detail: left > 1 ? `쓰고 나면 ${left - 1}번 남아요` : '쓰고 나면 정답을 공개할 수 있어요',
+    confirmText: '기회 쓰기',
+  });
+  if (!ok) return;
 
   return run(el.burn, '쓰는 중…', async () => {
     const res = await api('/api/chance', { method: 'POST', body: { game: gameKey } });
-    showMessage(
-      el.msg,
+    showToast(
       res.closest
         ? `${res.seq}번째 기회 · ${res.closest.displayName} 님이 가장 가까워요. (남은 기회 ${res.remaining}번)`
         : `${res.seq}번째 기회 · 5분 안에 든 사람이 없어요. (남은 기회 ${res.remaining}번)`,
@@ -256,12 +278,18 @@ el.burn.addEventListener('click', () => {
   });
 });
 
-el.reveal.addEventListener('click', () => {
-  if (!confirm('정답을 공개할까요? 공개하면 오차와 점수가 바로 확정됩니다.')) return;
+el.reveal.addEventListener('click', async () => {
+  const ok = await confirmDialog({
+    icon: '📣',
+    title: '정답을 공개할까요?',
+    message: '공개하면 모두의 오차와 점수가 그 자리에서 확정돼요. 되돌리려면 운영자에게 부탁해야 해요.',
+    confirmText: '공개하기',
+  });
+  if (!ok) return;
+
   return run(el.reveal, '공개 중…', async () => {
     const res = await api('/api/reveal', { method: 'POST', body: { game: gameKey } });
-    showMessage(
-      el.msg,
+    showToast(
       `${roundLabel(res.roundNo)} 정답 ${res.answer} 공개 완료 · 참가자 ${res.participants}명`,
       'ok',
     );
@@ -276,7 +304,7 @@ el.reveal.addEventListener('click', () => {
 function renderChances(state) {
   const { game, chances } = state;
   const on = game.useChances && (chances.total > 0 || chances.used > 0);
-  el.chanceBox.classList.toggle('hidden', !on);
+  setHidden(el.chanceBox, !on);
   if (!on) return;
 
   if (state.revealed) {
@@ -293,7 +321,7 @@ function renderChances(state) {
     el.chanceHeadline.textContent = '기회를 모두 썼어요. 곧 정답이 공개됩니다.';
   }
 
-  el.chanceLog.innerHTML = chances.log.length
+  setHtml(el.chanceLog, chances.log.length
     ? chances.log
         .map(
           (c) => `<div class="chance-row${
@@ -305,7 +333,7 @@ function renderChances(state) {
           }</div>`,
         )
         .join('')
-    : '';
+    : '');
 
   el.chanceNote.textContent = state.revealed
     ? ''
@@ -320,16 +348,16 @@ function renderSetter(state) {
   const recorded = !!mine.answerRecorded;
 
   el.setterLabel.textContent = state.revealed ? '오늘의 출제자' : '나만 아는 정답';
-  el.setterAvatar.innerHTML = avatarOf(state.setter);
+  setHtml(el.setterAvatar, avatarOf(state.setter));
   el.setterName.textContent = state.setter?.displayName ?? '';
 
   // 오후 게임의 시간 입력칸은 기록할 수 있을 때만 꺼내 둔다
-  el.answerInputWrap.classList.toggle('hidden', byButton || !mine.canRecord);
+  setHidden(el.answerInputWrap, byButton || !mine.canRecord);
   if (recorded && !answerInput.element.contains(document.activeElement)) {
     answerInput.value = mine.answer;
   }
 
-  el.secret.classList.toggle('hidden', !recorded || state.revealed);
+  setHidden(el.secret, !recorded || state.revealed);
   if (recorded) {
     el.secretTime.textContent = mine.answer;
     el.secretNote.textContent = state.chances.used
@@ -339,27 +367,27 @@ function renderSetter(state) {
         : '정답으로 기록해 뒀어요 · 나만 볼 수 있어요';
   }
 
-  el.record.classList.toggle('hidden', !mine.canRecord);
+  setHidden(el.record, !mine.canRecord);
   el.record.classList.toggle('btn--big', byButton && !recorded);
   el.record.classList.toggle('btn--ghost', recorded);
   el.record.textContent = byButton
     ? (recorded ? '다시 기록하기' : `${game.icon} ${game.answerButton}`)
     : (recorded ? '정답 다시 기록하기' : game.answerButton);
 
-  el.recordClear.classList.toggle('hidden', !(mine.canRecord && recorded));
+  setHidden(el.recordClear, !(mine.canRecord && recorded));
 
   // 기회가 걸린 게임은 기회를 다 써야 공개 버튼이 나온다.
   // (예측이 마감된 뒤에는 더 받을 답이 없으므로 남은 기회와 상관없이 공개할 수 있다)
   const chances = state.chances;
   const chancesLeft = game.useChances && chances.remaining > 0 && !state.closed;
 
-  el.burn.classList.toggle('hidden', state.revealed || !recorded || !chancesLeft);
+  setHidden(el.burn, state.revealed || !recorded || !chancesLeft);
   el.burn.disabled = !mine.canBurnChance;
   el.burn.textContent = chances.remaining === 1
     ? '마지막 기회 소진하기'
     : `기회 소진하기 (${chances.remaining}번 남음)`;
 
-  el.reveal.classList.toggle('hidden', state.revealed || !recorded || chancesLeft);
+  setHidden(el.reveal, state.revealed || !recorded || chancesLeft);
   el.reveal.disabled = !mine.canReveal;
 
   if (state.revealed) {
@@ -399,9 +427,9 @@ async function load() {
     : state.closed ? '마감됨' : `${state.closesAt} 마감`;
 
   // 누구의 시간을 맞히는 게임인지 — 출제자 프로필 사진과 함께 보여 준다
-  el.titleText.innerHTML = state.setter
+  setHtml(el.titleText, state.setter
     ? `${personChip(state.setter, 'avatar-chip--lg')} 님의 ${escapeHtml(game.subject)}`
-    : `오늘의 ${escapeHtml(game.subject)}`;
+    : `오늘의 ${escapeHtml(game.subject)}`);
 
   if (state.revealed) {
     const winners = state.players.filter((p) => p.isWinner);
@@ -416,7 +444,7 @@ async function load() {
   }
 
   // 정답 카드
-  el.answerBox.classList.toggle('hidden', !state.revealed);
+  setHidden(el.answerBox, !state.revealed);
   if (state.revealed) {
     el.answerTime.textContent = state.answer;
     const me = state.players.find((p) => p.isMe);
@@ -427,7 +455,7 @@ async function load() {
 
   // 마감 안내 (정답 없이 끝난 날)
   const voided = state.status === 'void';
-  el.closedBox.classList.toggle('hidden', !voided);
+  setHidden(el.closedBox, !voided);
   if (voided) {
     el.closedText.textContent = state.isToday
       ? `오늘 ${game.label}은 없던 일이 됐어요. 출제자가 정답을 기록하지 않은 날은 회차도 올라가지 않아요.`
@@ -436,9 +464,9 @@ async function load() {
 
   // 입력 카드 / 출제자 카드 / 운영자 카드
   const canGuess = isPlayer && !state.isSetter && !state.closed;
-  el.guessBox.classList.toggle('hidden', !canGuess);
-  el.setterBox.classList.toggle('hidden', !state.isSetter);
-  el.adminBox.classList.toggle('hidden', user.role !== 'admin');
+  setHidden(el.guessBox, !canGuess);
+  setHidden(el.setterBox, !state.isSetter);
+  setHidden(el.adminBox, user.role !== 'admin');
 
   renderChances(state);
   if (state.isSetter) renderSetter(state);
@@ -474,7 +502,7 @@ async function load() {
   // 출제자가 정답을 기록했는지는 아무에게도 알릴 수 없으므로, 여기서 기다리는 것은
   // '기록' 이 아니라 '공개' 다. (출제자 본인은 자기 카드에서 상태를 본다)
   const waiting = !state.revealed && state.status === 'open' && !state.isSetter && !!state.myGuess;
-  el.waitBox.classList.toggle('hidden', !waiting);
+  setHidden(el.waitBox, !waiting);
   if (waiting) {
     el.waitNote.textContent =
       `내 예측 ${state.myGuess} · 출제자가 정답을 공개하면 오차와 점수가 바로 확정돼요.`;
@@ -482,7 +510,7 @@ async function load() {
 
   // 참가자 목록
   el.playersLabel.textContent = state.revealed ? '결과' : '참가자';
-  el.players.innerHTML = state.players
+  setHtml(el.players, state.players
     .map((p) => {
       const winner = p.isWinner ? ' player--winner' : p.isClosest ? ' player--closest' : '';
       const tags =
@@ -506,16 +534,18 @@ async function load() {
         <div class="player__value">${escapeHtml(value)}</div>
       </div>`;
     })
-    .join('');
+    .join(''));
 }
 
 try {
   await load();
+  // 첫 화면만 위 칸부터 차례로 올라온다 (그 뒤의 등장은 setHidden 이 맡는다)
+  revealChildren(document.querySelector('[data-app]'));
 } catch (err) {
   // 네트워크가 끊기면 스켈레톤만 남으므로 상태를 알려 준다
-  showMessage(el.msg, `불러오지 못했습니다: ${err.message}`);
+  showToast(`불러오지 못했습니다: ${err.message}`, 'error');
   el.subtitle.textContent = '연결을 확인해 주세요';
-  el.players.innerHTML = '<p class="muted center">잠시 후 다시 시도합니다.</p>';
+  setHtml(el.players, '<p class="muted center">잠시 후 다시 시도합니다.</p>');
 }
 
 // 다른 참가자의 확정이나 정답 공개를 반영하기 위해 주기적으로 새로고침

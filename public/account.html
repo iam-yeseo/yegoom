@@ -20,8 +20,6 @@
       <span id="subtitle">&nbsp;</span>
     </h1>
 
-    <p id="msg" class="msg hidden" role="alert"></p>
-
     <section class="card">
       <div class="card__label">프로필 사진</div>
 
@@ -93,15 +91,16 @@
 
   <script type="module">
     import {
-      api, avatarOf, renderTabbar, requireLogin, roleLabel, showMessage, startClock,
+      api, avatarOf, playOnce, renderTabbar, requireLogin, revealChildren, roleLabel,
+      setHidden, setHtml, startClock,
     } from '/js/common.js';
+    import { confirmDialog, showToast } from '/js/ui.js';
     import { pickSquarePhoto } from '/js/photo-picker.js';
 
     const EMOJI_PICKS = ['🐣', '🐤', '🐥', '🦊', '🐼', '🐧', '🍀', '⭐', '🔥', '🌙', '🍜', '🕕'];
     const NICKNAME_RE = /^[가-힣ㄱ-ㅎㅏ-ㅣa-zA-Z0-9]+$/u;
 
     const el = {
-      msg: document.getElementById('msg'),
       subtitle: document.getElementById('subtitle'),
       previewAvatar: document.getElementById('preview-avatar'),
       previewName: document.getElementById('preview-name'),
@@ -118,6 +117,8 @@
     startClock();
     const user = await requireLogin();
     renderTabbar(user);
+    // 첫 화면만 위 칸부터 차례로 올라온다
+    revealChildren(document.querySelector('.app'));
 
     /** 이모지 한 개는 1글자로 센다 */
     const segmenter = 'Segmenter' in Intl
@@ -136,13 +137,14 @@
     let photoUrl = user.photoUrl ?? null;
     syncPreview();
 
-    el.picks.innerHTML = EMOJI_PICKS.map(
+    setHtml(el.picks, EMOJI_PICKS.map(
       (e) => `<button class="chip" type="button" data-emoji="${e}">${e}</button>`,
-    ).join('');
+    ).join(''));
     el.picks.addEventListener('click', (e) => {
       const chip = e.target.closest('.chip');
       if (!chip) return;
       el.avatar.value = chip.dataset.emoji;
+      playOnce(chip, 'is-picked');
       syncPreview();
     });
 
@@ -153,12 +155,12 @@
       const letter = graphemes(el.avatar.value.trim())[0] ?? '🙂';
       const person = { avatar: letter, photoUrl, displayName: el.nickname.value.trim() };
 
-      el.photoPreview.innerHTML = avatarOf(person);
-      el.photoRemove.classList.toggle('hidden', !photoUrl);
+      setHtml(el.photoPreview, avatarOf(person));
+      setHidden(el.photoRemove, !photoUrl);
       el.photoPick.textContent = photoUrl ? '다른 사진으로 바꾸기' : '앨범에서 사진 고르기';
 
       // 목록 미리보기 — 사진이 있으면 사진이, 없으면 프로필 글자가 보인다
-      el.previewAvatar.innerHTML = avatarOf(person);
+      setHtml(el.previewAvatar, avatarOf(person));
       el.previewName.textContent = el.nickname.value.trim() || '닉네임';
       for (const chip of el.picks.querySelectorAll('.chip')) {
         chip.setAttribute('aria-pressed', String(chip.dataset.emoji === el.avatar.value.trim()));
@@ -176,12 +178,11 @@
       el.photoFile.value = '';
       if (!file) return;
 
-      showMessage(el.msg, '');
       let dataUrl;
       try {
         dataUrl = await pickSquarePhoto(file);   // 정방형으로 자르는 화면
       } catch (err) {
-        return showMessage(el.msg, err.message);
+        return showToast(err.message, 'error');
       }
       if (!dataUrl) return;                      // 자르기를 취소했다
 
@@ -189,7 +190,14 @@
     });
 
     el.photoRemove.addEventListener('click', async () => {
-      if (!confirm('프로필 사진을 지울까요? 프로필 글자가 대신 보이게 됩니다.')) return;
+      const ok = await confirmDialog({
+        icon: '🗑️',
+        title: '프로필 사진을 지울까요?',
+        message: '사진을 지우면 프로필 글자가 대신 보이게 돼요.',
+        confirmText: '지우기',
+        tone: 'danger',
+      });
+      if (!ok) return;
       await savePhoto(null, '프로필 사진을 지웠어요.');
     });
 
@@ -202,9 +210,9 @@
         const res = await api('/api/profile', { method: 'POST', body: { photo } });
         photoUrl = res.user.photoUrl ?? null;
         syncPreview();
-        showMessage(el.msg, okMessage, 'ok');
+        showToast(okMessage, 'ok');
       } catch (err) {
-        showMessage(el.msg, err.message);
+        showToast(err.message, 'error');
         el.photoPick.textContent = label;
       } finally {
         for (const b of buttons) b.disabled = false;
@@ -219,13 +227,13 @@
 
       // 서버에서도 같은 규칙으로 검사하지만, 먼저 알려 주면 덜 답답하다
       if (!NICKNAME_RE.test(displayName)) {
-        return showMessage(el.msg, '닉네임은 한글, 영문, 숫자만 쓸 수 있어요.');
+        return showToast('닉네임은 한글, 영문, 숫자만 쓸 수 있어요.', 'error');
       }
       if (graphemes(displayName).length > 10) {
-        return showMessage(el.msg, '닉네임은 10글자까지 가능해요.');
+        return showToast('닉네임은 10글자까지 가능해요.', 'error');
       }
       if (graphemes(avatar).length !== 1) {
-        return showMessage(el.msg, '프로필 글자는 딱 한 글자만 넣을 수 있어요.');
+        return showToast('프로필 글자는 딱 한 글자만 넣을 수 있어요.', 'error');
       }
 
       try {
@@ -234,15 +242,14 @@
         el.avatar.value = res.user.avatar;
         photoUrl = res.user.photoUrl ?? null;
         syncPreview();
-        showMessage(el.msg, '프로필을 저장했어요.', 'ok');
+        showToast('프로필을 저장했어요.', 'ok');
       } catch (err) {
-        showMessage(el.msg, err.message);
+        showToast(err.message, 'error');
       }
     });
 
     document.getElementById('pw-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      showMessage(el.msg, '');
       try {
         const res = await api('/api/password', {
           method: 'POST',
@@ -251,10 +258,10 @@
             newPassword: document.getElementById('next').value,
           },
         });
-        showMessage(el.msg, res.message, 'ok');
-        setTimeout(() => location.replace('/login'), 1200);
+        showToast(res.message, 'ok');
+        setTimeout(() => location.replace('/login'), 1500);
       } catch (err) {
-        showMessage(el.msg, err.message);
+        showToast(err.message, 'error');
       }
     });
 

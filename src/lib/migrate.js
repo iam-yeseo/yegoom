@@ -15,6 +15,8 @@
 //   계정          : 운영자 전용 admin 계정을 만들고, 기존 운영자는 출제자/플레이어로 옮긴다
 //   퀴즈          : quiz_turn / quiz_rounds / quiz_photos / quiz_players / quiz_attempts 표 추가
 //                  (표만 새로 만들면 되므로 0단계에서 함께 처리된다)
+//   퀴즈 진행 방식 : quiz_rounds 에 mode / time_limit_sec / deadline_at / closed_reason 추가
+//                  (기존 퀴즈는 전부 자유 모드가 된다)
 
 import { GAMES } from './games.js';
 import { SCHEMA_STATEMENTS } from './schema.js';
@@ -88,6 +90,10 @@ export async function pendingMigrations(db) {
       break;
     }
   }
+
+  // 퀴즈 진행 방식 (자유 · 선착순 · 제한시간) — quiz_rounds 에 컬럼 넷이 붙는다
+  const quizCols = await columnsOf(db, 'quiz_rounds');
+  if (quizCols.length && !quizCols.includes('mode')) pending.push('quiz_rounds.mode');
 
   // 운영자 전용 계정이 아직 없으면 계정 정리도 남아 있는 것이다
   const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
@@ -247,6 +253,11 @@ export async function migrate(db) {
     applied.push('rounds.chances_used');
   }
 
+  // 6-2. 퀴즈 진행 방식 — 컬럼만 더 붙이면 된다.
+  //      이미 있던 퀴즈는 mode 기본값 'free' 를 받아 지금까지와 똑같이 굴러간다.
+  //      (deadline_at 이 NULL 이면 제한시간이 없는 것이므로 자동 마감도 걸리지 않는다.)
+  applied.push(...(await migrateQuizModes(db)));
+
   // 7. 계정 — 운영자를 admin 계정 하나로 분리한다
   applied.push(...(await migrateAccounts(db)));
 
@@ -386,6 +397,31 @@ async function migrateSetters(db) {
   }
 
   return applied;
+}
+
+/**
+ * quiz_rounds 에 진행 방식 컬럼을 붙인다.
+ *
+ *   mode           'free' | 'first' | 'timed' — 없던 퀴즈는 전부 'free'
+ *   time_limit_sec 'timed' 일 때 고른 제한시간 (초)
+ *   deadline_at    'timed' 일 때 마감 시각. NULL 이면 자동 마감이 걸리지 않는다.
+ *   closed_reason  끝난 계기 — 예전에 끝난 퀴즈는 모두 출제자가 직접 끝낸 것이다
+ *
+ * ADD COLUMN 은 새 컬럼에 CHECK 를 걸 수 없어서, mode 의 값 검사는 코드
+ * (src/lib/quiz.js 의 quizModeOf) 가 맡는다. 새로 만드는 DB 는 schema.js 의
+ * 정의대로 CHECK 까지 함께 걸린다.
+ */
+async function migrateQuizModes(db) {
+  const cols = await columnsOf(db, 'quiz_rounds');
+  if (!cols.length || cols.includes('mode')) return [];
+
+  await db.prepare(`ALTER TABLE quiz_rounds ADD COLUMN mode TEXT NOT NULL DEFAULT 'free'`).run();
+  await db.prepare(`ALTER TABLE quiz_rounds ADD COLUMN time_limit_sec INTEGER`).run();
+  await db.prepare(`ALTER TABLE quiz_rounds ADD COLUMN deadline_at TEXT`).run();
+  await db.prepare(`ALTER TABLE quiz_rounds ADD COLUMN closed_reason TEXT`).run();
+  await db.prepare(`UPDATE quiz_rounds SET closed_reason = 'setter' WHERE status = 'closed'`).run();
+
+  return ['quiz_rounds.mode'];
 }
 
 /**

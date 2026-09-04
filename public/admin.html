@@ -20,8 +20,6 @@
       <span>오늘의 두 게임과 퀴즈 현황 · 운영자 전용</span>
     </h1>
 
-    <p id="msg" class="msg hidden" role="alert"></p>
-
     <section class="card">
       <div class="card__label">정답은 출제자가 넣습니다</div>
       <p class="muted" style="margin: 0; font-size: 14px">
@@ -55,12 +53,12 @@
 
   <script type="module">
     import {
-      GAMES, QUIZ, api, avatarOf, escapeHtml, renderTabbar, requireLogin, roundLabel, showMessage,
-      startClock,
+      GAMES, QUIZ, api, avatarOf, escapeHtml, renderTabbar, requireLogin, revealChildren,
+      roundLabel, setHtml, startClock,
     } from '/js/common.js';
+    import { confirmDialog, showToast } from '/js/ui.js';
 
     const el = {
-      msg: document.getElementById('msg'),
       games: document.getElementById('games'),
       quiz: document.getElementById('quiz'),
     };
@@ -239,33 +237,43 @@
         Promise.all(Object.keys(GAMES).map((key) => api(`/api/today?game=${key}`))),
         api('/api/quiz'),
       ]);
-      el.games.innerHTML = states.map(gameCard).join('');
-      el.quiz.innerHTML = quizCard(quizState);
+      setHtml(el.games, states.map(gameCard).join(''));
+      setHtml(el.quiz, quizCard(quizState));
     }
 
     el.games.addEventListener('click', async (e) => {
       const btn = e.target.closest('[data-cancel]');
       if (!btn) return;
       const game = GAMES[btn.dataset.cancel];
-      if (!confirm(`${game.label}의 정답 공개를 취소할까요? 점수 기록도 함께 되돌아갑니다.`)) return;
+
+      const ok = await confirmDialog({
+        icon: '↩️',
+        title: '정답 공개를 취소할까요?',
+        message: '점수 기록도 함께 되돌아갑니다. 출제자가 정답을 다시 기록해야 해요.',
+        detail: `${game.icon} ${game.label}`,
+        confirmText: '공개 취소',
+        tone: 'danger',
+      });
+      if (!ok) return;
 
       btn.disabled = true;
-      showMessage(el.msg, '');
       try {
         await api(`/api/admin/round?game=${game.key}`, { method: 'DELETE' });
-        showMessage(el.msg, `${game.label}의 공개를 취소했습니다.`, 'ok');
+        showToast(`${game.label}의 공개를 취소했습니다.`, 'ok');
       } catch (err) {
-        showMessage(el.msg, err.message);
+        showToast(err.message, 'error');
       }
       await load().catch(() => {});
     });
 
     try {
       await load();
+      // 첫 화면만 위 칸부터 차례로 올라온다
+      revealChildren(document.querySelector('.app'));
     } catch (err) {
-      showMessage(el.msg, `불러오지 못했습니다: ${err.message}`);
-      el.games.innerHTML = '<p class="muted center">잠시 후 다시 시도해 주세요.</p>';
-      el.quiz.innerHTML = '';
+      showToast(`불러오지 못했습니다: ${err.message}`, 'error');
+      setHtml(el.games, '<p class="muted center">잠시 후 다시 시도해 주세요.</p>');
+      setHtml(el.quiz, '');
     }
   </script>
 </body>

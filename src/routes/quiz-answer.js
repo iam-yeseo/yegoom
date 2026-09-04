@@ -8,11 +8,16 @@
 // 다른 사람이 힌트를 열거나 틀려도 이미 받은 점수는 흔들리지 않는다.
 //
 // 맞힌 순서는 SQL 안에서 세므로, 두 사람이 같은 순간에 답을 내도 1등은 한 명뿐이다.
+//
+// 진행 방식에 따라 이 답이 퀴즈를 끝낼 수도 있다.
+//   first  맞히는 순간 퀴즈가 끝난다 (선착순 한 명)
+//   timed  제한시간이 지났으면 답을 받지 않고 그 자리에서 마감한다
+//   free   여기서는 아무것도 끝나지 않는다 — 출제자가 끝낸다
 
 import { fail, json, readJson, requireUser } from '../lib/util.js';
 import {
-  FIRST_SCORE, NEXT_SCORE, WRONG_PENALTY, hintPenalty, isCorrectAnswer, normalizeSubmission,
-  openQuiz, scoreFor,
+  FIRST_SCORE, NEXT_SCORE, WRONG_PENALTY, closeQuizRound, formatDuration, hintPenalty,
+  isCorrectAnswer, modeOf, normalizeSubmission, openQuiz, personById, scoreFor, settleExpiredQuiz,
 } from '../lib/quiz.js';
 
 export async function onRequestPost(context) {
@@ -21,9 +26,15 @@ export async function onRequestPost(context) {
   if (response) return response;
   if (user.role !== 'player') return fail(403, '운영자는 정답을 낼 수 없습니다.');
 
+  // 제한시간이 지났으면 답을 받기 전에 마감한다 — 늦은 답은 한 건도 들어오지 않는다
+  const expired = await settleExpiredQuiz(db);
+  if (expired) return fail(409, '제한시간이 끝나 마감됐어요.');
+
   const quiz = await openQuiz(db);
   if (!quiz) return fail(409, '지금은 진행 중인 퀴즈가 없어요.');
   if (quiz.setter_user_id === user.id) return fail(403, '출제자는 자기 문제를 맞힐 수 없어요.');
+
+  const mode = modeOf(quiz);
 
   const body = await readJson(context.request);
   const submitted = normalizeSubmission(body.answer);
@@ -35,6 +46,17 @@ export async function onRequestPost(context) {
     .bind(quiz.id, user.id)
     .first();
   if (mine?.solved_at) return fail(409, '이미 정답을 맞혔어요.');
+
+  // 선착순 문제는 한 명이 맞히면 그것으로 끝이다. 자동 종료와 거의 동시에 들어온
+  // 답까지 막으려면 여기서 한 번 더 확인해야 한다.
+  if (mode.key === 'first') {
+    const already = await db
+      .prepare(`SELECT COUNT(*) AS n FROM quiz_players
+                 WHERE quiz_id = ? AND solved_at IS NOT NULL`)
+      .bind(quiz.id)
+      .first();
+    if (already?.n) return fail(409, '한발 늦었어요. 이미 정답자가 나왔어요.');
+  }
 
   const hintsUsed = mine?.hints_used ?? 0;
   const wrongs = mine?.wrongs ?? 0;
@@ -97,6 +119,9 @@ export async function onRequestPost(context) {
     .first();
 
   if (correct) {
+    // 선착순 문제는 이 답으로 끝난다 — 정답이 공개되고 출제 턴이 나에게 넘어온다
+    const finished = mode.key === 'first' ? await closeQuizRound(db, quiz, { reason: 'first' }) : null;
+
     return json({
       ok: true,
       correct: true,
@@ -106,6 +131,11 @@ export async function onRequestPost(context) {
       score: row?.score ?? 0,
       hintsUsed: row?.hints_used ?? 0,
       wrongs: row?.wrongs ?? 0,
+      mode: mode.key,
+      closed: !!finished,
+      closedReason: finished?.reason ?? null,
+      roundNo: finished?.roundNo ?? null,
+      nextTurn: finished ? await personById(db, finished.nextTurnId) : null,
     });
   }
 
@@ -121,6 +151,13 @@ export async function onRequestPost(context) {
     answer: submitted.value,
     wrongs: row?.wrongs ?? 0,
     attempts: row?.attempts ?? 0,
+    mode: mode.key,
+    closed: false,
+    // 제한시간 문제에서는 얼마나 남았는지도 함께 알려 준다
+    secondsLeft: quiz.seconds_left === null || quiz.seconds_left === undefined
+      ? null
+      : Math.max(0, quiz.seconds_left),
+    timeLeftLabel: quiz.seconds_left > 0 ? formatDuration(quiz.seconds_left) : null,
     potentialScore: scoreFor({
       first: (solvedCount?.n ?? 0) === 0,
       hintsUsed: row?.hints_used ?? 0,

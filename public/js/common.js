@@ -1,4 +1,4 @@
-// 모든 페이지가 공유하는 헬퍼 — API 호출, 상단 시계, 하단 탭바, 로그인 가드
+// 모든 페이지가 공유하는 헬퍼 — API 호출, 상단 시계, 하단 탭바, 로그인 가드, 화면 갱신
 
 /* ---------------- API ---------------- */
 
@@ -180,6 +180,66 @@ export async function requireLogin({ adminOnly = false } = {}) {
   }
 
   return me.user;
+}
+
+/* ---------------- 화면 갱신 ---------------- */
+//
+// 이 앱의 화면은 15초마다 서버에 상태를 물어 통째로 다시 그린다. 그대로 두면
+// 바뀐 게 없어도 DOM 이 매번 갈아 끼워지고, 등장 애니메이션도 15초마다 다시 돈다.
+// 그래서 "정말 달라졌을 때만" 손대는 헬퍼 두 개를 여기 둔다.
+
+/**
+ * 내용이 실제로 달라졌을 때만 innerHTML 을 갈아 끼운다.
+ *
+ * 같은 내용을 다시 쓰지 않으므로 목록이 깜빡이지 않고, 선택 상태나 스크롤도
+ * 그대로 남는다. 새로 그려질 때만 애니메이션이 도니까 그 움직임이 곧
+ * "무언가 바뀌었다" 는 신호가 된다.
+ *
+ * @returns {boolean} 실제로 바꿨으면 true
+ */
+export function setHtml(el, html) {
+  if (!el || el.innerHTML === html) return false;
+  el.innerHTML = html;
+  return true;
+}
+
+/**
+ * 칸을 보이거나 숨긴다. 숨어 있던 칸이 나타날 때만 등장 애니메이션을 붙인다.
+ *
+ * .hidden 은 display:none 이라 트랜지션이 걸리지 않는다. 그래서 나타나는 순간에
+ * 한 번만 도는 클래스를 얹는 방식으로 처리한다.
+ */
+export function setHidden(el, hidden) {
+  if (!el) return;
+  const was = el.classList.contains('hidden');
+  el.classList.toggle('hidden', !!hidden);
+  if (was && !hidden) playOnce(el, 'is-revealed');
+}
+
+/**
+ * 한 번만 도는 애니메이션 클래스를 얹는다.
+ * 이미 붙어 있으면 떼었다가 다시 붙여 처음부터 다시 돌게 한다.
+ */
+export function playOnce(el, className = 'is-revealed') {
+  if (!el) return;
+  el.classList.remove(className);
+  void el.offsetWidth;          // 리플로우를 한 번 강제해야 애니메이션이 다시 시작된다
+  el.classList.add(className);
+}
+
+/**
+ * 첫 화면을 순서대로 띄운다 — 위 칸부터 차례로 올라온다.
+ * 처음 그릴 때 딱 한 번만 부르면 된다 (그 뒤의 등장은 setHidden 이 맡는다).
+ */
+export function revealChildren(container, { step = 45, max = 10 } = {}) {
+  if (!container) return;
+  const visible = [...container.children].filter((c) => !c.classList.contains('hidden'));
+  visible.forEach((child, i) => {
+    child.style.animationDelay = `${Math.min(i, max) * step}ms`;
+    child.classList.add('is-revealed');
+    // 지연값은 한 번 쓰고 지운다 — 나중에 다시 나타날 때는 곧바로 떠야 한다
+    child.addEventListener('animationend', () => { child.style.animationDelay = ''; }, { once: true });
+  });
 }
 
 /* ---------------- 자잘한 것들 ---------------- */

@@ -152,12 +152,20 @@ export const SCHEMA_STATEMENTS = [
      updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
    )`,
 
-  // 퀴즈 한 판. 한 번에 하나만 'open' 이고, 출제자가 끝내면 'closed' 가 된다.
-  //   answer_type  'number' 숫자만 · 'text' 텍스트 · 'ox' OX
-  //   answer_text  출제자가 적은 그대로. 쉼표로 나눈 여러 정답을 모두 인정한다.
-  //   hint1~3      단계별 힌트. 비워 두면 그 단계는 없다.
-  //   has_photo    사진 한 장을 넣었는지 (사진 자체는 quiz_photos 에 있다)
-  //   round_no     끝난 퀴즈에만 순서대로 매겨진다
+  // 퀴즈 한 판. 한 번에 하나만 'open' 이고, 끝나면 'closed' 가 된다.
+  //   answer_type    'number' 숫자만 · 'text' 텍스트 · 'ox' OX
+  //   answer_text    출제자가 적은 그대로. 쉼표로 나눈 여러 정답을 모두 인정한다.
+  //   hint1~3        단계별 힌트. 비워 두면 그 단계는 없다.
+  //   has_photo      사진 한 장을 넣었는지 (사진 자체는 quiz_photos 에 있다)
+  //   round_no       끝난 퀴즈에만 순서대로 매겨진다
+  //
+  // 언제 끝나는지는 출제자가 문제를 내면서 고른다 (src/lib/quiz.js 의 QUIZ_MODES).
+  //   mode           'free'  출제자가 끝낼 때까지
+  //                  'first' 첫 정답이 나오면 바로
+  //                  'timed' 제한시간이 지나면 자동으로
+  //   time_limit_sec 'timed' 일 때 출제자가 고른 제한시간 (초)
+  //   deadline_at    'timed' 일 때 마감 시각 (UTC). 이 시각이 지나면 서버가 알아서 끝낸다.
+  //   closed_reason  끝난 계기 — 'setter' 직접 끝냄 · 'first' 첫 정답 · 'timeup' 시간 종료
   //
   // 정답과 힌트는 진행 중에는 출제자 본인에게만 내려간다.
   `CREATE TABLE IF NOT EXISTS quiz_rounds (
@@ -165,6 +173,10 @@ export const SCHEMA_STATEMENTS = [
      round_no       INTEGER,
      setter_user_id INTEGER REFERENCES users(id),
      answer_type    TEXT    NOT NULL CHECK (answer_type IN ('number', 'text', 'ox')),
+     mode           TEXT    NOT NULL DEFAULT 'free'
+                            CHECK (mode IN ('free', 'first', 'timed')),
+     time_limit_sec INTEGER,
+     deadline_at    TEXT,
      question       TEXT    NOT NULL,
      answer_text    TEXT    NOT NULL,
      hint1          TEXT,
@@ -172,6 +184,7 @@ export const SCHEMA_STATEMENTS = [
      hint3          TEXT,
      has_photo      INTEGER NOT NULL DEFAULT 0,
      status         TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+     closed_reason  TEXT,
      created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
      closed_at      TEXT
    )`,
