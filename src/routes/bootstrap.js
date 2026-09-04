@@ -96,12 +96,24 @@ async function readStatus(db) {
       /* 아직 표가 없으면 출제자 표시만 비워 둔다 */
     }
 
+    // 퀴즈 출제 차례도 같은 자리에 보여 준다 (quiz_turn 은 한 줄짜리 표다)
+    let quizTurnId = null;
+    try {
+      const row = await db.prepare(`SELECT user_id FROM quiz_turn WHERE id = 1`).first();
+      quizTurnId = row?.user_id ?? null;
+    } catch {
+      /* 아직 표가 없으면 비워 둔다 */
+    }
+
     const users = (results ?? []).map((u) => ({
       username: u.username,
       displayName: u.display_name,
       avatar: u.avatar ?? '🙂',
       role: u.role,
-      setterGames: setters.filter((s) => s.user_id === u.id).map((s) => s.game),
+      setterGames: [
+        ...setters.filter((s) => s.user_id === u.id).map((s) => s.game),
+        ...(quizTurnId === u.id ? ['quiz'] : []),
+      ],
     }));
     return { ready: users.length > 0, userCount: users.length, users };
   } catch {

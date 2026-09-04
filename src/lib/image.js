@@ -1,8 +1,11 @@
-// 프로필 사진 검사 — 브라우저가 보낸 data URL 을 뜯어 "정방형 이미지가 맞는지" 확인한다.
+// 사진 검사 — 브라우저가 보낸 data URL 을 뜯어 쓸 수 있는 이미지인지 확인한다.
 //
-// 자르기는 브라우저에서 하지만, 화면을 거치지 않고 API 를 직접 부를 수도 있으므로
-// 서버에서도 같은 규칙을 다시 확인한다. Workers 에는 이미지 디코더가 없어서
+// 줄이고 자르는 일은 브라우저에서 하지만, 화면을 거치지 않고 API 를 직접 부를 수도
+// 있으므로 서버에서도 같은 규칙을 다시 확인한다. Workers 에는 이미지 디코더가 없어서
 // 파일 앞머리(헤더)만 읽어 실제 형식과 가로·세로를 알아낸다.
+//
+// 프로필 사진은 정방형만 받고(normalizePhoto), 퀴즈 문제에 붙는 사진은 비율을
+// 가리지 않는다(normalizeQuizPhoto). 나머지 규칙은 똑같다.
 
 /** 브라우저가 만드는 것과 같은 형식만 받는다. */
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -13,6 +16,10 @@ export const MAX_PHOTO_SIDE = 1024;
 export const MIN_PHOTO_SIDE = 64;
 /** 저장할 수 있는 최대 용량(바이트). base64 로는 약 1.34배가 된다. */
 export const MAX_PHOTO_BYTES = 300 * 1024;
+
+/** 퀴즈 문제에 붙는 사진 — 글과 함께 보는 그림이라 조금 더 크게 받는다. */
+export const MAX_QUIZ_PHOTO_SIDE = 1600;
+export const MAX_QUIZ_PHOTO_BYTES = 500 * 1024;
 
 /** "data:image/jpeg;base64,...." 에서 mime 과 base64 본문을 떼어 낸다. */
 function splitDataUrl(value) {
@@ -111,20 +118,30 @@ export function readImageMeta(bytes) {
 }
 
 /**
- * 프로필 사진으로 쓸 수 있는지 확인한다.
+ * 사진으로 쓸 수 있는지 확인한다.
  * 확장자나 헤더에 적힌 형식이 아니라 실제 바이트를 보고 판단한다.
  *
- * @returns {{ mime: string, base64: string, size: number, width: number }
+ * @param {string} input  "data:image/jpeg;base64,..." 모양의 문자열
+ * @param {{ square?: boolean, maxBytes?: number, maxSide?: number, minSide?: number }} [options]
+ *        square 를 끄면 비율을 가리지 않는다 (퀴즈 문제 사진).
+ * @returns {{ mime: string, base64: string, size: number, width: number, height: number }
  *           | { error: string }}
  */
-export function normalizePhoto(input) {
+export function normalizeImage(input, options = {}) {
+  const {
+    square = true,
+    maxBytes = MAX_PHOTO_BYTES,
+    maxSide = MAX_PHOTO_SIDE,
+    minSide = MIN_PHOTO_SIDE,
+  } = options;
+
   const parts = splitDataUrl(input);
   if (!parts) return { error: '사진을 읽지 못했어요. 다시 골라 주세요.' };
 
   const bytes = decodeBase64(parts.base64);
   if (!bytes || !bytes.length) return { error: '사진을 읽지 못했어요. 다시 골라 주세요.' };
-  if (bytes.length > MAX_PHOTO_BYTES) {
-    return { error: `사진이 너무 큽니다. ${Math.floor(MAX_PHOTO_BYTES / 1024)}KB 이하로 올려 주세요.` };
+  if (bytes.length > maxBytes) {
+    return { error: `사진이 너무 큽니다. ${Math.floor(maxBytes / 1024)}KB 이하로 올려 주세요.` };
   }
 
   const meta = readImageMeta(bytes);
@@ -136,9 +153,30 @@ export function normalizePhoto(input) {
 
   const { width, height } = meta;
   if (!width || !height) return { error: '사진 크기를 확인하지 못했어요.' };
-  if (width !== height) return { error: '프로필 사진은 정방형(1:1)으로만 넣을 수 있어요.' };
-  if (width < MIN_PHOTO_SIDE) return { error: `사진이 너무 작아요. ${MIN_PHOTO_SIDE}px 이상이어야 해요.` };
-  if (width > MAX_PHOTO_SIDE) return { error: `사진이 너무 커요. ${MAX_PHOTO_SIDE}px 이하로 줄여 주세요.` };
+  if (square && width !== height) {
+    return { error: '프로필 사진은 정방형(1:1)으로만 넣을 수 있어요.' };
+  }
+  if (Math.min(width, height) < minSide) {
+    return { error: `사진이 너무 작아요. ${minSide}px 이상이어야 해요.` };
+  }
+  if (Math.max(width, height) > maxSide) {
+    return { error: `사진이 너무 커요. ${maxSide}px 이하로 줄여 주세요.` };
+  }
 
-  return { mime: meta.mime, base64: parts.base64, size: bytes.length, width };
+  return { mime: meta.mime, base64: parts.base64, size: bytes.length, width, height };
+}
+
+/** 프로필 사진 — 정방형만 받는다 */
+export function normalizePhoto(input) {
+  return normalizeImage(input, { square: true });
+}
+
+/** 퀴즈 문제에 붙는 사진 — 비율은 가리지 않고, 조금 더 큰 것까지 받는다 */
+export function normalizeQuizPhoto(input) {
+  return normalizeImage(input, {
+    square: false,
+    maxBytes: MAX_QUIZ_PHOTO_BYTES,
+    maxSide: MAX_QUIZ_PHOTO_SIDE,
+    minSide: 32,
+  });
 }

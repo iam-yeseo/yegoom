@@ -103,6 +103,20 @@ export const GAMES = {
   },
 };
 
+/**
+ * 예굼퀴즈대회 — 날짜로 나뉘지 않는 세 번째 게임.
+ * 규칙과 배점은 서버(src/lib/quiz.js)가 내려 주므로 여기에는 이름표만 둔다.
+ * 오전·오후와 달리 /api/today 를 쓰지 않아서 GAMES 와는 따로 둔다.
+ */
+export const QUIZ = {
+  key: 'quiz',
+  label: '예굼퀴즈대회',
+  short: '퀴즈',
+  icon: '🧠',
+  title: '문제 내고 맞히기',
+  path: '/quiz',
+};
+
 /** 지금(KST) 진행 중인 게임 — 오전 게임 마감(10:00) 전이면 오전 */
 export function currentGameKey(now = new Date()) {
   const hour = Number(
@@ -115,12 +129,14 @@ export function currentGameKey(now = new Date()) {
 
 /* ---------------- 하단 탭바 ---------------- */
 
+// 탭이 여섯 개까지 늘어나서 이름표는 짧게 둔다 (좁은 화면에서도 한 줄에 들어가야 한다)
 const TABS = [
-  { href: GAMES.morning.path, icon: GAMES.morning.icon, label: GAMES.morning.label },
-  { href: GAMES.evening.path, icon: GAMES.evening.icon, label: GAMES.evening.label },
+  { href: GAMES.morning.path, icon: GAMES.morning.icon, label: GAMES.morning.short },
+  { href: GAMES.evening.path, icon: GAMES.evening.icon, label: GAMES.evening.short },
+  { href: QUIZ.path, icon: QUIZ.icon, label: QUIZ.short },
   { href: '/ranking', icon: '🏆', label: '랭킹' },
   { href: '/admin', icon: '🔑', label: '운영', adminOnly: true },
-  { href: '/account', icon: '👤', label: '내 프로필' },
+  { href: '/account', icon: '👤', label: '프로필' },
 ];
 
 export function renderTabbar(user) {
@@ -231,10 +247,10 @@ export function roundLabel(no) {
   return `${no ?? 1}회차`;
 }
 
-/** 역할 이름 — 운영자 / 오전 출제자 / 오후 출제자 / 플레이어 */
+/** 역할 이름 — 운영자 / 오전·오후·퀴즈 출제자 / 플레이어 */
 export function roleLabel(user) {
   if (user?.role === 'admin') return '운영자';
   const games = user?.setterGames ?? [];
   if (!games.length) return '플레이어';
-  return `${games.map((g) => GAMES[g]?.short ?? g).join('·')} 출제자`;
+  return `${games.map((g) => (g === QUIZ.key ? QUIZ.short : GAMES[g]?.short ?? g)).join('·')} 출제자`;
 }

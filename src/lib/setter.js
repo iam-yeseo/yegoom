@@ -5,6 +5,7 @@
 // 다른 게임에는 평범한 플레이어로 참가한다 (오전 출제자도 오후 게임은 한다).
 
 import { GAME_KEYS, gameKeyOf } from './games.js';
+import { QUIZ, hasQuizTurn } from './quiz.js';
 import { personOf } from './util.js';
 
 const SETTER_COLUMNS = 'u.id, u.username, u.display_name, u.avatar, u.photo_version';
@@ -73,8 +74,13 @@ export async function setterGamesOf(db, userId) {
   }
 }
 
-/** 로그인 응답에 넣을 사용자 정보 — 어떤 게임의 출제자인지까지 붙인다. */
+/**
+ * 로그인 응답에 넣을 사용자 정보 — 어떤 게임의 출제자인지까지 붙인다.
+ * 예굼퀴즈대회의 출제 턴은 game_setters 가 아니라 quiz_turn 에 있어서 따로 붙인다.
+ */
 export async function userWithSetterGames(db, user) {
   if (!user) return null;
-  return { ...user, setterGames: await setterGamesOf(db, user.id) };
+  const setterGames = await setterGamesOf(db, user.id);
+  if (await hasQuizTurn(db, user.id)) setterGames.push(QUIZ.key);
+  return { ...user, setterGames };
 }

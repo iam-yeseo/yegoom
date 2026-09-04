@@ -13,6 +13,8 @@
 //   game_setters : 게임별 출제자 표 추가 (기존 출제자는 오후, 오전은 min)
 //   기회          : rounds 에 chances_total/chances_used 추가 + round_chances / game_config 표
 //   계정          : 운영자 전용 admin 계정을 만들고, 기존 운영자는 출제자/플레이어로 옮긴다
+//   퀴즈          : quiz_turn / quiz_rounds / quiz_photos / quiz_players / quiz_attempts 표 추가
+//                  (표만 새로 만들면 되므로 0단계에서 함께 처리된다)
 
 import { GAMES } from './games.js';
 import { SCHEMA_STATEMENTS } from './schema.js';
@@ -79,6 +81,14 @@ export async function pendingMigrations(db) {
   if (!(await columnsOf(db, 'round_chances')).length) pending.push('round_chances');
   if (!(await columnsOf(db, 'game_config')).length) pending.push('game_config');
 
+  // 예굼퀴즈대회 — 표가 통째로 새로 생긴다 (0단계에서 만들어진다)
+  for (const table of ['quiz_turn', 'quiz_rounds', 'quiz_photos', 'quiz_players', 'quiz_attempts']) {
+    if (!(await columnsOf(db, table)).length) {
+      pending.push('quiz');
+      break;
+    }
+  }
+
   // 운영자 전용 계정이 아직 없으면 계정 정리도 남아 있는 것이다
   const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
   if (seedAdmin) {
@@ -95,8 +105,11 @@ export async function pendingMigrations(db) {
 export async function migrate(db) {
   const applied = [];
 
-  // 0. 없는 테이블은 새 모양으로 만든다 (있으면 그대로 둔다)
+  // 0. 없는 테이블은 새 모양으로 만든다 (있으면 그대로 둔다).
+  //    퀴즈 표들은 컬럼을 옮길 게 없어서 이 단계가 전부다 — 만들어졌는지만 남겨 둔다.
+  const hadQuiz = (await columnsOf(db, 'quiz_rounds')).length > 0;
   await db.batch(SCHEMA_STATEMENTS.map((sql) => db.prepare(sql)));
+  if (!hadQuiz && (await columnsOf(db, 'quiz_rounds')).length) applied.push('quiz');
 
   // 1. users — 그냥 컬럼만 붙이면 된다
   const userCols = await columnsOf(db, 'users');

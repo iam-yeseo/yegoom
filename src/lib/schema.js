@@ -140,4 +140,81 @@ export const SCHEMA_STATEMENTS = [
      PRIMARY KEY (game, game_date, user_id)
    )`,
   `CREATE INDEX IF NOT EXISTS idx_results_user ON results(user_id)`,
+
+  /* ---------------- 예굼퀴즈대회 ---------------- */
+
+  // 출제 턴 — 지금 문제를 낼 차례인 사람 한 명. 표에는 언제나 한 줄만 있다.
+  // 운영자가 처음 지정하고, 그다음부터는 가장 먼저 정답을 맞힌 사람에게 넘어간다.
+  // 퀴즈는 날짜로 나뉘지 않으므로 game_setters(오전/오후) 와 따로 둔다.
+  `CREATE TABLE IF NOT EXISTS quiz_turn (
+     id         INTEGER PRIMARY KEY CHECK (id = 1),
+     user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+     updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+   )`,
+
+  // 퀴즈 한 판. 한 번에 하나만 'open' 이고, 출제자가 끝내면 'closed' 가 된다.
+  //   answer_type  'number' 숫자만 · 'text' 텍스트 · 'ox' OX
+  //   answer_text  출제자가 적은 그대로. 쉼표로 나눈 여러 정답을 모두 인정한다.
+  //   hint1~3      단계별 힌트. 비워 두면 그 단계는 없다.
+  //   has_photo    사진 한 장을 넣었는지 (사진 자체는 quiz_photos 에 있다)
+  //   round_no     끝난 퀴즈에만 순서대로 매겨진다
+  //
+  // 정답과 힌트는 진행 중에는 출제자 본인에게만 내려간다.
+  `CREATE TABLE IF NOT EXISTS quiz_rounds (
+     id             INTEGER PRIMARY KEY AUTOINCREMENT,
+     round_no       INTEGER,
+     setter_user_id INTEGER REFERENCES users(id),
+     answer_type    TEXT    NOT NULL CHECK (answer_type IN ('number', 'text', 'ox')),
+     question       TEXT    NOT NULL,
+     answer_text    TEXT    NOT NULL,
+     hint1          TEXT,
+     hint2          TEXT,
+     hint3          TEXT,
+     has_photo      INTEGER NOT NULL DEFAULT 0,
+     status         TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+     created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+     closed_at      TEXT
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_quiz_rounds_status ON quiz_rounds(status)`,
+
+  // 문제에 붙는 사진 — 퀴즈 한 판에 최대 한 장. 프로필 사진과 같은 방식으로
+  // base64 문자열을 담아 두고 /api/quiz/photo 가 이미지로 내려 준다.
+  // 목록을 읽을 때마다 딸려 오면 응답이 무거워지므로 표를 따로 뒀다.
+  `CREATE TABLE IF NOT EXISTS quiz_photos (
+     quiz_id    INTEGER PRIMARY KEY REFERENCES quiz_rounds(id) ON DELETE CASCADE,
+     mime       TEXT    NOT NULL,
+     size       INTEGER NOT NULL,
+     data       TEXT    NOT NULL,
+     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+   )`,
+
+  // 퀴즈별 참가 기록 — 사람마다 한 줄.
+  //   hints_used  지금까지 연 힌트 단계 (0~3). 힌트는 연 사람에게만 보인다.
+  //   wrongs      틀린 횟수. 한 번 틀릴 때마다 1점씩 깎인다.
+  //   solved_rank 맞힌 순서. 1이면 가장 먼저 맞힌 사람이라 다음 출제자가 된다.
+  //   score       맞힌 그 순간에 확정된 점수 (10 또는 8에서 감점을 뺀 값)
+  `CREATE TABLE IF NOT EXISTS quiz_players (
+     quiz_id     INTEGER NOT NULL REFERENCES quiz_rounds(id) ON DELETE CASCADE,
+     user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     hints_used  INTEGER NOT NULL DEFAULT 0,
+     wrongs      INTEGER NOT NULL DEFAULT 0,
+     attempts    INTEGER NOT NULL DEFAULT 0,
+     solved_rank INTEGER,
+     score       INTEGER,
+     solved_at   TEXT,
+     updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+     PRIMARY KEY (quiz_id, user_id)
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_quiz_players_user ON quiz_players(user_id)`,
+
+  // 제출 기록 — 누가 언제 무엇을 냈는지. 내 오답은 나에게만 보여 준다.
+  `CREATE TABLE IF NOT EXISTS quiz_attempts (
+     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+     quiz_id    INTEGER NOT NULL REFERENCES quiz_rounds(id) ON DELETE CASCADE,
+     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+     answer     TEXT    NOT NULL,
+     is_correct INTEGER NOT NULL DEFAULT 0,
+     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_quiz_attempts_quiz ON quiz_attempts(quiz_id, user_id)`,
 ];

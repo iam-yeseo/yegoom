@@ -33,7 +33,9 @@
       <p class="muted" style="margin: 0 0 12px; font-size: 14px">
         게임마다 출제자를 한 명씩 둡니다. 오전 게임은 출제자의 기상시간이, 오후 게임은
         출제자의 퇴근시간이 그날의 정답입니다. 출제자는 자기 게임에만 빠지고 다른 게임에는
-        평범한 플레이어로 참가합니다. 운영자로 로그인해야 보입니다.
+        평범한 플레이어로 참가합니다. <b>예굼퀴즈대회</b>는 여기서 지정한 사람이 첫 문제를
+        내고, 그다음부터는 가장 먼저 정답을 맞힌 사람에게 차례가 저절로 넘어갑니다.
+        운영자로 로그인해야 보입니다.
       </p>
       <div id="setter-list"><div class="skeleton"></div></div>
     </section>
@@ -70,7 +72,7 @@
   </main>
 
   <script type="module">
-    import { GAMES, api, avatarOf, escapeHtml, showMessage } from '/js/common.js';
+    import { GAMES, QUIZ, api, avatarOf, escapeHtml, showMessage } from '/js/common.js';
 
     const el = {
       msg: document.getElementById('msg'),
@@ -90,7 +92,10 @@
     function setterText(user) {
       const games = user.setterGames ?? [];
       if (!games.length) return null;
-      return games.map((g) => `${GAMES[g]?.icon ?? ''} ${GAMES[g]?.short ?? g} 출제자`).join(' · ');
+      return games
+        .map((g) => (g === QUIZ.key ? QUIZ : GAMES[g]))
+        .map((g, i) => `${g?.icon ?? ''} ${g?.short ?? games[i]} 출제자`)
+        .join(' · ');
     }
 
     function renderUsers(users) {
