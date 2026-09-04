@@ -6,6 +6,10 @@
 // 빈틈 없는 정방형이다.
 //
 //   const dataUrl = await pickSquarePhoto(file);   // 취소하면 null
+//
+// 퀴즈 문제에 붙이는 사진은 비율을 가리지 않으므로 자르기 창 없이 크기만 줄인다.
+//
+//   const dataUrl = await shrinkPhoto(file);
 
 /** 저장할 사진 한 변의 길이(px). 프로필 칸은 작지만 고해상도 화면을 감안했다. */
 const OUTPUT_SIZE = 512;
@@ -13,6 +17,10 @@ const OUTPUT_SIZE = 512;
 const MAX_BYTES = 260 * 1024;
 /** 원본이 너무 크면 브라우저가 힘들어하므로 미리 줄여서 다룬다. */
 const MAX_SOURCE_SIDE = 2048;
+
+/** 퀴즈 문제에 붙이는 사진 — 긴 변 기준. 서버가 받아 주는 한도보다 넉넉히 아래다. */
+const WIDE_MAX_SIDE = 1280;
+const WIDE_MAX_BYTES = 440 * 1024;
 
 /** 파일을 그림으로 읽는다. 아이폰 사진의 회전 정보(EXIF)도 반영한다. */
 async function loadImage(file) {
@@ -44,13 +52,52 @@ const sizeOf = (img) => ({
 });
 
 /** 캔버스를 용량 안에 들어오는 JPEG data URL 로 만든다. */
-function toDataUrl(canvas) {
+function toDataUrl(canvas, maxBytes = MAX_BYTES) {
   for (const quality of [0.86, 0.78, 0.7, 0.6, 0.5]) {
     const url = canvas.toDataURL('image/jpeg', quality);
     // base64 는 원본의 약 4/3 이라 길이로 용량을 가늠할 수 있다
-    if ((url.length - url.indexOf(',') - 1) * 0.75 <= MAX_BYTES) return url;
+    if ((url.length - url.indexOf(',') - 1) * 0.75 <= maxBytes) return url;
   }
   return canvas.toDataURL('image/jpeg', 0.4);
+}
+
+/** 앨범에서 고른 파일이 쓸 만한지 먼저 본다 (두 고르기 함수가 함께 쓴다) */
+function checkFile(file) {
+  if (!/^image\//.test(file.type)) throw new Error('사진 파일만 고를 수 있어요.');
+  if (file.size > 30 * 1024 * 1024) throw new Error('사진이 너무 큽니다. 30MB 이하로 골라 주세요.');
+}
+
+/**
+ * 자르지 않고 크기만 줄여 data URL 로 돌려준다 (퀴즈 문제에 붙이는 사진).
+ * 가로세로 비율은 그대로 두고, 긴 변만 한도 안으로 맞춘다.
+ */
+export async function shrinkPhoto(file, { maxSide = WIDE_MAX_SIDE, maxBytes = WIDE_MAX_BYTES } = {}) {
+  if (!file) return null;
+  checkFile(file);
+
+  const image = await loadImage(file);
+  const source = sizeOf(image);
+  if (!source.width || !source.height) throw new Error('사진을 읽지 못했어요.');
+
+  const k = Math.min(1, maxSide / Math.max(source.width, source.height));
+  const width = Math.max(1, Math.round(source.width * k));
+  const height = Math.max(1, Math.round(source.height * k));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  // JPEG 은 투명을 모르므로 밑색을 깔아 둔다
+  ctx.fillStyle = '#151a30';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(image, 0, 0, width, height);
+
+  try {
+    return toDataUrl(canvas, maxBytes);
+  } finally {
+    image.close?.();          // ImageBitmap 은 직접 닫아 준다
+  }
 }
 
 /**
@@ -59,8 +106,7 @@ function toDataUrl(canvas) {
  */
 export async function pickSquarePhoto(file) {
   if (!file) return null;
-  if (!/^image\//.test(file.type)) throw new Error('사진 파일만 고를 수 있어요.');
-  if (file.size > 30 * 1024 * 1024) throw new Error('사진이 너무 큽니다. 30MB 이하로 골라 주세요.');
+  checkFile(file);
 
   const image = await loadImage(file);
   const source = sizeOf(image);

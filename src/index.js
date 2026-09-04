@@ -19,6 +19,13 @@ import * as me from './routes/me.js';
 import * as migrate from './routes/migrate.js';
 import * as password from './routes/password.js';
 import * as profile from './routes/profile.js';
+import * as quiz from './routes/quiz.js';
+import * as quizAnswer from './routes/quiz-answer.js';
+import * as quizClose from './routes/quiz-close.js';
+import * as quizHint from './routes/quiz-hint.js';
+import * as quizHistory from './routes/quiz-history.js';
+import * as quizPhoto from './routes/quiz-photo.js';
+import * as quizTurn from './routes/quiz-turn.js';
 import * as ranking from './routes/ranking.js';
 import * as reveal from './routes/reveal.js';
 import * as setup from './routes/setup.js';
@@ -36,6 +43,14 @@ const ROUTES = new Map([
   ['/api/answer', answer],
   ['/api/chance', chance],
   ['/api/reveal', reveal],
+  // 예굼퀴즈대회 — 날짜 구분 없이 한 판씩 이어지는 게임
+  ['/api/quiz', quiz],
+  ['/api/quiz/answer', quizAnswer],
+  ['/api/quiz/hint', quizHint],
+  ['/api/quiz/close', quizClose],
+  ['/api/quiz/turn', quizTurn],
+  ['/api/quiz/photo', quizPhoto],
+  ['/api/quiz/history', quizHistory],
   ['/api/ranking', ranking],
   ['/api/history', history],
   ['/api/password', password],

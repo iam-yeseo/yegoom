@@ -17,7 +17,7 @@
 
     <h1 class="page-title">
       운영
-      <span>오늘의 두 게임 현황 · 운영자 전용</span>
+      <span>오늘의 두 게임과 퀴즈 현황 · 운영자 전용</span>
     </h1>
 
     <p id="msg" class="msg hidden" role="alert"></p>
@@ -36,11 +36,16 @@
       <div class="card"><div class="skeleton"></div></div>
     </div>
 
+    <div id="quiz">
+      <div class="card"><div class="skeleton"></div></div>
+    </div>
+
     <section class="card">
       <div class="card__label">출제자</div>
       <p class="muted" style="margin: 0 0 12px; font-size: 14px">
         게임마다 한 명씩 지정합니다. 출제자는 자기 게임에만 빠지고, 다른 게임에는 평범한
-        플레이어로 참가합니다.
+        플레이어로 참가합니다. 예굼퀴즈대회는 처음 한 명만 지정하면, 그다음부터는 가장 먼저
+        정답을 맞힌 사람에게 차례가 저절로 넘어갑니다.
       </p>
       <a class="btn btn--ghost" href="/setup">출제자 · 기회 횟수 바꾸기</a>
     </section>
@@ -50,13 +55,14 @@
 
   <script type="module">
     import {
-      GAMES, api, avatarOf, escapeHtml, renderTabbar, requireLogin, roundLabel, showMessage,
+      GAMES, QUIZ, api, avatarOf, escapeHtml, renderTabbar, requireLogin, roundLabel, showMessage,
       startClock,
     } from '/js/common.js';
 
     const el = {
       msg: document.getElementById('msg'),
       games: document.getElementById('games'),
+      quiz: document.getElementById('quiz'),
     };
 
     startClock();
@@ -149,11 +155,92 @@
       </section>`;
     }
 
+    /**
+     * 예굼퀴즈대회 현황 — 날짜로 나뉘지 않는 게임이라 카드 하나로 요약한다.
+     * 정답은 진행 중에는 운영자에게도 내려오지 않는다 (출제자만 안다).
+     */
+    function quizCard(state) {
+      const quiz = state.quiz;
+
+      let summary;
+      if (!quiz) {
+        summary = state.turn
+          ? '아직 첫 문제가 나오지 않았습니다.'
+          : '출제자를 지정해야 시작됩니다.';
+      } else if (quiz.closed) {
+        summary = `끝난 퀴즈 · 정답 <b>${escapeHtml(quiz.answer ?? '—')}</b> · ${
+          quiz.solvedCount
+        }명이 맞혔습니다.`;
+      } else {
+        summary = `진행 중 · ${quiz.solvedCount}명이 맞혔습니다. 정답은 출제자만 볼 수 있습니다.`;
+      }
+
+      const rows = state.players
+        .map((p) => {
+          const meta = p.solved
+            ? `${p.rank}번째로 맞힘 · +${p.score}점`
+            : p.attempts || p.hintsUsed
+              ? `도전 중 · 힌트 ${p.hintsUsed}단계 · 오답 ${p.wrongs}회`
+              : '아직 도전 전';
+          return `<div class="player${p.rank === 1 ? ' player--winner' : ''}">
+            <div class="player__avatar" aria-hidden="true">${avatarOf(p)}</div>
+            <div class="player__body">
+              <div class="player__name">${escapeHtml(p.displayName)}</div>
+              <div class="player__meta">${escapeHtml(meta)} · 퀴즈 누적 ${p.totalScore}점</div>
+            </div>
+            <div class="player__value">${p.solved ? (p.rank === 1 ? '🏆' : '✅') : '⏳'}</div>
+          </div>`;
+        })
+        .join('');
+
+      return `<section class="card">
+        <div class="card__label">${QUIZ.icon} ${escapeHtml(QUIZ.label)}</div>
+
+        <div class="round-line">
+          <span class="round-badge">${escapeHtml(
+            roundLabel(quiz && !quiz.closed ? state.roundNo : state.nextRoundNo),
+          )}</span>
+          <span class="round-line__note">${
+            quiz && !quiz.closed ? '진행 중' : '출제 대기'
+          }</span>
+        </div>
+
+        <p style="margin: 0 0 12px">${summary}</p>
+        ${
+          quiz && !quiz.closed
+            ? `<p class="quiz-question" style="font-size: 16px">${escapeHtml(quiz.question)}</p>`
+            : ''
+        }
+
+        <div class="profile-preview" style="margin-bottom: 14px; padding-bottom: 14px">
+          <div class="profile-preview__avatar" aria-hidden="true">${
+            state.turn ? avatarOf(state.turn) : '🙂'
+          }</div>
+          <div>
+            <div class="profile-preview__name">${
+              state.turn ? escapeHtml(state.turn.displayName) : '출제자 없음'
+            }</div>
+            <div class="muted" style="font-size: 13px">${
+              state.turn
+                ? quiz && !quiz.closed
+                  ? '이 사람이 낸 문제가 진행 중입니다.'
+                  : '이 사람이 다음 문제를 낼 차례입니다.'
+                : '지정해야 게임이 시작됩니다.'
+            }</div>
+          </div>
+        </div>
+
+        <div>${rows}</div>
+      </section>`;
+    }
+
     async function load() {
-      const states = await Promise.all(
-        Object.keys(GAMES).map((key) => api(`/api/today?game=${key}`)),
-      );
+      const [states, quizState] = await Promise.all([
+        Promise.all(Object.keys(GAMES).map((key) => api(`/api/today?game=${key}`))),
+        api('/api/quiz'),
+      ]);
       el.games.innerHTML = states.map(gameCard).join('');
+      el.quiz.innerHTML = quizCard(quizState);
     }
 
     el.games.addEventListener('click', async (e) => {
@@ -178,6 +265,7 @@
     } catch (err) {
       showMessage(el.msg, `불러오지 못했습니다: ${err.message}`);
       el.games.innerHTML = '<p class="muted center">잠시 후 다시 시도해 주세요.</p>';
+      el.quiz.innerHTML = '';
     }
   </script>
 </body>

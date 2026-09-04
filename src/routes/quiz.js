@@ -1,0 +1,283 @@
+// 예굼퀴즈대회 — 지금 상태를 내려 주고(GET), 새 문제를 받는다(POST).
+//
+// 날짜 구분이 없는 게임이라 "오늘" 대신 "지금 열려 있는 퀴즈" 하나가 전부다.
+// 열린 퀴즈가 없으면 마지막으로 끝난 퀴즈를 그대로 보여 준다 — 다음 문제를
+// 기다리는 동안에도 직전 결과가 화면에 남아 있게 하기 위해서다.
+//
+// 정답과 힌트는 진행 중에 아무에게나 내려가지 않는다.
+//   정답  출제자 본인에게만 (끝나면 모두에게)
+//   힌트  자기가 연 단계까지만 (끝나면 모두에게)
+
+import { fail, json, personOf, readJson, requireUser } from '../lib/util.js';
+import {
+  ANSWER_TYPES, MAX_HINTS, answerTypeOf, closedCount, getQuizTurn, hintsOf, latestQuiz,
+  nextHintPenalty, normalizeAnswerText, normalizeHint, normalizeQuestion, openQuiz, personById,
+  quizInfo, quizPhotoUrl, quizPlayerRows, roundNumberFor, scoreFor,
+} from '../lib/quiz.js';
+import { normalizeQuizPhoto } from '../lib/image.js';
+
+export async function onRequestGet(context) {
+  const db = context.env.DB;
+  const { user, response } = await requireUser(context);
+  if (response) return response;
+
+  const [quiz, turn, playersRes, totalsRes] = await Promise.all([
+    latestQuiz(db),
+    getQuizTurn(db),
+    db.prepare(
+      `SELECT id, username, display_name, avatar, photo_version FROM users
+        WHERE role = 'player' ORDER BY id`,
+    ).all(),
+    db.prepare(
+      `SELECT user_id,
+              COALESCE(SUM(score), 0)                                  AS score,
+              COALESCE(SUM(CASE WHEN solved_rank = 1 THEN 1 ELSE 0 END), 0) AS firsts
+         FROM quiz_players WHERE solved_at IS NOT NULL GROUP BY user_id`,
+    ).all(),
+  ]);
+
+  const totalByUser = new Map((totalsRes.results ?? []).map((t) => [t.user_id, t]));
+  const info = quizInfo();
+
+  // 아직 아무도 문제를 낸 적이 없는 상태
+  if (!quiz) {
+    return json({
+      ok: true,
+      game: info,
+      roundNo: 1,
+      nextRoundNo: 1,
+      turn,
+      isTurnHolder: turn?.id === user.id,
+      canSet: turn?.id === user.id && user.role === 'player',
+      quiz: null,
+      me: null,
+      players: (playersRes.results ?? []).map((p) =>
+        personOf(p, {
+          isMe: p.id === user.id,
+          totalScore: totalByUser.get(p.id)?.score ?? 0,
+          totalFirsts: totalByUser.get(p.id)?.firsts ?? 0,
+        }),
+      ),
+      user,
+    });
+  }
+
+  const [setter, rows, roundNo, closedTotal] = await Promise.all([
+    personById(db, quiz.setter_user_id),
+    quizPlayerRows(db, quiz.id),
+    roundNumberFor(db, quiz),
+    closedCount(db),
+  ]);
+
+  const isOpen = quiz.status === 'open';
+  const isSetter = setter?.id === user.id;
+  const hints = hintsOf(quiz);
+  const rowByUser = new Map(rows.map((r) => [r.user_id, r]));
+  const mine = rowByUser.get(user.id) ?? null;
+  const solvedCount = rows.filter((r) => r.solved_at).length;
+
+  // 출제자는 참가자가 아니다 (자기 문제의 답을 아는 사람이다)
+  const players = (playersRes.results ?? [])
+    .filter((p) => p.id !== setter?.id)
+    .map((p) => {
+      const row = rowByUser.get(p.id);
+      const totals = totalByUser.get(p.id);
+      return personOf(p, {
+        isMe: p.id === user.id,
+        solved: !!row?.solved_at,
+        rank: row?.solved_rank ?? null,
+        score: row?.solved_at ? row.score : null,
+        hintsUsed: row?.hints_used ?? 0,
+        wrongs: row?.wrongs ?? 0,
+        attempts: row?.attempts ?? 0,
+        totalScore: totals?.score ?? 0,
+        totalFirsts: totals?.firsts ?? 0,
+      });
+    });
+
+  // 내가 낸 답들 — 나에게만 보여 준다 (남의 오답은 아무에게도 내려가지 않는다)
+  const { results: myAttempts } = mine
+    ? await db
+        .prepare(
+          `SELECT answer, is_correct, created_at FROM quiz_attempts
+            WHERE quiz_id = ? AND user_id = ? ORDER BY id ASC`,
+        )
+        .bind(quiz.id, user.id)
+        .all()
+    : { results: [] };
+
+  const hintsUsed = mine?.hints_used ?? 0;
+  const solved = !!mine?.solved_at;
+  const isPlayer = user.role === 'player';
+
+  return json({
+    ok: true,
+    game: info,
+    // roundNo 는 지금 보여 주는 퀴즈의 회차, nextRoundNo 는 다음에 낼 퀴즈의 회차다.
+    // 진행 중인 퀴즈가 없을 때는 화면이 nextRoundNo 를 쓴다.
+    roundNo,
+    nextRoundNo: closedTotal + 1,
+    turn,
+    isTurnHolder: turn?.id === user.id,
+    canSet: turn?.id === user.id && isPlayer && !isOpen,
+    quiz: {
+      id: quiz.id,
+      roundNo,
+      status: quiz.status,
+      closed: !isOpen,
+      setter,
+      answerType: quiz.answer_type,
+      answerTypeLabel: ANSWER_TYPES[quiz.answer_type]?.label ?? quiz.answer_type,
+      answerTypeNote: ANSWER_TYPES[quiz.answer_type]?.note ?? '',
+      question: quiz.question,
+      photoUrl: quizPhotoUrl(quiz),
+      hintCount: hints.length,
+      solvedCount,
+      createdAt: quiz.created_at,
+      closedAt: quiz.closed_at,
+      // 정답은 끝난 뒤에, 또는 출제자 본인에게만
+      answer: !isOpen || isSetter ? quiz.answer_text : null,
+      // 힌트도 마찬가지 — 진행 중에는 각자 연 만큼만 따로 내려간다 (me.hints)
+      hints: !isOpen || isSetter ? hints : null,
+    },
+    me: {
+      isSetter,
+      isPlayer,
+      solved,
+      rank: mine?.solved_rank ?? null,
+      score: solved ? mine.score : null,
+      hintsUsed,
+      wrongs: mine?.wrongs ?? 0,
+      attempts: mine?.attempts ?? 0,
+      // 내가 연 힌트만 (1단계부터 차례로 열린다)
+      hints: hints.slice(0, hintsUsed),
+      hintsLeft: Math.max(0, hints.length - hintsUsed),
+      nextHintPenalty: hintsUsed < hints.length ? nextHintPenalty(hintsUsed) : null,
+      // 지금 맞히면 받을 점수 — 첫 정답이면 10점, 아니면 8점에서 감점을 뺀다
+      potentialScore: scoreFor({
+        first: solvedCount === 0,
+        hintsUsed,
+        wrongs: mine?.wrongs ?? 0,
+      }),
+      wouldBeFirst: solvedCount === 0,
+      canAnswer: isOpen && isPlayer && !isSetter && !solved,
+      canHint: isOpen && isPlayer && !isSetter && !solved && hintsUsed < hints.length,
+      canClose: isOpen && isSetter,
+      attemptLog: (myAttempts ?? []).map((a) => ({
+        answer: a.answer,
+        correct: a.is_correct === 1,
+        at: a.created_at,
+      })),
+    },
+    players,
+    user,
+  });
+}
+
+/**
+ * 새 문제 출제 — 출제 턴을 가진 사람만, 그리고 열려 있는 퀴즈가 없을 때만.
+ *
+ * 사진은 한 장까지 붙일 수 있고, 힌트는 3단계까지 비워 둘 수 있다.
+ * 2단계만 적고 1단계를 비우면 순서가 어긋나므로 앞에서부터 채우도록 정리한다.
+ */
+export async function onRequestPost(context) {
+  const db = context.env.DB;
+  const { user, response } = await requireUser(context);
+  if (response) return response;
+  if (user.role !== 'player') return fail(403, '운영자는 문제를 낼 수 없습니다.');
+
+  const turn = await getQuizTurn(db);
+  if (turn?.id !== user.id) return fail(403, '지금은 출제 차례가 아니에요.');
+  if (await openQuiz(db)) return fail(409, '아직 진행 중인 퀴즈가 있어요.');
+
+  const body = await readJson(context.request);
+
+  const answerType = answerTypeOf(body.answerType ?? body.type);
+  if (!answerType) return fail(400, '정답 종류를 골라 주세요.');
+
+  const question = normalizeQuestion(body.question);
+  if (question.error) return fail(400, question.error);
+
+  const answer = normalizeAnswerText(answerType.key, body.answer);
+  if (answer.error) return fail(400, answer.error);
+
+  // 비워 둔 단계는 빼고 앞에서부터 채운다 — 힌트는 1단계부터 차례로 열리기 때문이다
+  const hints = [];
+  for (const raw of (Array.isArray(body.hints) ? body.hints : []).slice(0, MAX_HINTS)) {
+    const hint = normalizeHint(raw);
+    if (hint.error) return fail(400, hint.error);
+    if (hint.value) hints.push(hint.value);
+  }
+
+  const photo = body.photo ? normalizeQuizPhoto(body.photo) : null;
+  if (photo?.error) return fail(400, photo.error);
+
+  const created = await db
+    .prepare(
+      `INSERT INTO quiz_rounds
+         (setter_user_id, answer_type, question, answer_text, hint1, hint2, hint3, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'open')`,
+    )
+    .bind(
+      user.id,
+      answerType.key,
+      question.value,
+      answer.value,
+      hints[0] ?? null,
+      hints[1] ?? null,
+      hints[2] ?? null,
+    )
+    .run();
+
+  const quizId = created.meta?.last_row_id;
+  if (!quizId) return fail(500, '문제를 저장하지 못했어요. 다시 시도해 주세요.');
+
+  // 사진은 따로 넣고 나서 has_photo 를 올린다. 사진 저장이 실패해도 문제는 남는다.
+  if (photo) {
+    await db.batch([
+      db
+        .prepare(`INSERT INTO quiz_photos (quiz_id, mime, size, data) VALUES (?, ?, ?, ?)`)
+        .bind(quizId, photo.mime, photo.size, photo.base64),
+      db.prepare(`UPDATE quiz_rounds SET has_photo = 1 WHERE id = ?`).bind(quizId),
+    ]);
+  }
+
+  return json({
+    ok: true,
+    quizId,
+    roundNo: await roundNumberFor(db, { status: 'open' }),
+    answerType: answerType.key,
+    hintCount: hints.length,
+    hasPhoto: !!photo,
+  });
+}
+
+/**
+ * 잘못 낸 문제 지우기 — 아직 아무도 답을 내지 않았을 때만 되돌릴 수 있다.
+ * 회차로 세지 않고 통째로 사라지므로, 이미 누가 답을 냈다면 '퀴즈 종료' 로 끝내야 한다.
+ */
+export async function onRequestDelete(context) {
+  const db = context.env.DB;
+  const { user, response } = await requireUser(context);
+  if (response) return response;
+
+  const quiz = await openQuiz(db);
+  if (!quiz) return fail(409, '진행 중인 퀴즈가 없어요.');
+  if (quiz.setter_user_id !== user.id) return fail(403, '문제를 낸 사람만 지울 수 있어요.');
+
+  const touched = await db
+    .prepare(`SELECT COUNT(*) AS n FROM quiz_attempts WHERE quiz_id = ?`)
+    .bind(quiz.id)
+    .first();
+  if (touched?.n) {
+    return fail(409, '이미 답을 낸 사람이 있어서 지울 수 없어요. 퀴즈를 종료해 주세요.');
+  }
+
+  await db.batch([
+    db.prepare(`DELETE FROM quiz_photos WHERE quiz_id = ?`).bind(quiz.id),
+    db.prepare(`DELETE FROM quiz_players WHERE quiz_id = ?`).bind(quiz.id),
+    db.prepare(`DELETE FROM quiz_rounds WHERE id = ?`).bind(quiz.id),
+  ]);
+
+  return json({ ok: true, quizId: quiz.id });
+}
