@@ -109,7 +109,7 @@ document.querySelector('[data-app]').innerHTML = `
     <p style="margin: 0 0 12px">
       정답은 출제자가 직접 기록하고 공개합니다. 정답은 운영자도 몰라요.
     </p>
-    <a class="btn btn--ghost" href="/admin">운영 화면으로</a>
+    <a class="btn btn--ghost" href="/setup">게임 설정으로</a>
   </section>
 
   <!-- 예측을 확정해 두고 정답이 공개되기를 기다리는 동안 -->

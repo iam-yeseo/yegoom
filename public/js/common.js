@@ -132,13 +132,12 @@ export function currentGameKey(now = new Date()) {
 
 /* ---------------- 하단 탭바 ---------------- */
 
-// 탭이 여섯 개까지 늘어나서 이름표는 짧게 둔다 (좁은 화면에서도 한 줄에 들어가야 한다)
+// 운영자와 플레이어 모두 같은 다섯 게임 탭을 사용한다.
 const TABS = [
   { href: GAMES.morning.path, icon: GAMES.morning.icon, label: GAMES.morning.short },
   { href: GAMES.evening.path, icon: GAMES.evening.icon, label: GAMES.evening.short },
   { href: QUIZ.path, icon: QUIZ.icon, label: QUIZ.short },
   { href: '/catchmind', icon: '🔮', label: '독심술사' },
-  { href: '/admin', icon: '🔑', label: '운영', adminOnly: true },
   { href: '/numberluck', icon: '🃏', label: '숫자 고르기' },
 ];
 
