@@ -10,10 +10,7 @@
 </head>
 <body>
   <div class="app">
-    <header class="clock">
-      <div class="clock__date" data-clock-date>&nbsp;</div>
-      <div class="clock__time" data-clock-time>--:--</div>
-    </header>
+    <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
     <h1 class="page-title">
       내 프로필
@@ -92,7 +89,7 @@
   <script type="module">
     import {
       api, avatarOf, playOnce, renderTabbar, requireLogin, revealChildren, roleLabel,
-      setHidden, setHtml, startClock,
+      setHidden, setHtml,
     } from '/js/common.js';
     import { confirmDialog, showToast } from '/js/ui.js';
     import { pickSquarePhoto } from '/js/photo-picker.js';
@@ -114,7 +111,7 @@
       photoFile: document.getElementById('photo-file'),
     };
 
-    startClock();
+
     const user = await requireLogin();
     renderTabbar(user);
     // 첫 화면만 위 칸부터 차례로 올라온다

@@ -1,3 +1,5 @@
+import { PARTY_SCHEMA } from './party-schema.js';
+
 // 테이블 정의의 단일 출처.
 // 여기서 schema.sql 과 부트스트랩 엔드포인트가 함께 만들어지므로 둘이 어긋날 일이 없다.
 // 모두 IF NOT EXISTS 라 여러 번 실행해도 기존 데이터를 건드리지 않는다.
@@ -6,6 +8,7 @@
 // src/lib/migrate.js 가 새 모양으로 옮긴다.
 
 export const SCHEMA_STATEMENTS = [
+  ...PARTY_SCHEMA,
   // 사용자: 플레이어 + 운영자
   //   role 권한. 'admin' 은 게임에 참여하지 않는 운영자 계정이다.
   // 출제자는 게임마다 다르므로 users 가 아니라 game_setters 에 적는다.

@@ -10,17 +10,14 @@
 </head>
 <body>
   <div class="app">
-    <header class="clock">
-      <div class="clock__date" data-clock-date>&nbsp;</div>
-      <div class="clock__time" data-clock-time>--:--</div>
-    </header>
+    <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
     <h1 class="page-title">
       누적 랭킹
-      <span id="subtitle">오전 · 오후 · 퀴즈의 점수를 모두 합쳐서 셉니다.</span>
+      <span id="subtitle">다섯 게임의 점수를 모두 합쳐서 셉니다.</span>
     </h1>
 
-    <!-- 세 게임을 합쳐서, 또는 한 게임만 따로 볼 수 있다 -->
+    <!-- 다섯 게임을 합쳐서, 또는 한 게임만 따로 볼 수 있다 -->
     <div class="segmented" role="tablist" aria-label="게임 고르기" id="scope">
       <button class="segmented__item" type="button" role="tab" data-scope="" aria-selected="true">
         전체
@@ -31,6 +28,8 @@
               aria-selected="false">🌆 오후</button>
       <button class="segmented__item" type="button" role="tab" data-scope="quiz"
               aria-selected="false">🧠 퀴즈</button>
+      <button class="segmented__item" type="button" role="tab" data-scope="catchmind" aria-selected="false">🔮 독심술사</button>
+      <button class="segmented__item" type="button" role="tab" data-scope="numberluck" aria-selected="false">🃏 숫자 고르기</button>
     </div>
 
     <section class="card">
@@ -53,9 +52,11 @@
   <script type="module">
     import {
       GAMES, QUIZ, api, avatarOf, escapeHtml, formatShortDate, personChip, playOnce,
-      renderTabbar, requireLogin, revealChildren, roundLabel, setHtml, startClock,
+      renderTabbar, requireLogin, revealChildren, roundLabel, setHtml,
     } from '/js/common.js';
 
+    import { renderPartyHistory } from '/js/party-history.js';
+    const PARTY = { catchmind: {label:'독심술사'},numberluck:{label:'숫자 고르기'} };
     const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
 
     const el = {
@@ -67,11 +68,11 @@
       history: document.getElementById('history'),
     };
 
-    startClock();
+
     const user = await requireLogin();
     renderTabbar(user);
 
-    let scope = '';   // '' 이면 두 게임 합산
+    let scope = '';   // '' 이면 다섯 게임 합산
 
     /*
      * 무엇을 크게 보여 줄지가 보기 방식마다 다르다.
@@ -85,7 +86,7 @@
 
     /** 전체 합산 — 어느 게임에서 얼마를 벌었는지 */
     function totalMeta(r) {
-      return `🌅 ${r.morningScore}점 / 🌆 ${r.eveningScore}점 / 🧠 ${r.quizScore}점`;
+      return `🌅 ${r.morningScore}점 / 🌆 ${r.eveningScore}점 / 🧠 ${r.quizScore}점 / 🔮 ${r.catchmindScore}점 / 🃏 ${r.numberluckScore}점`;
     }
 
     /** 오전 · 오후 한 게임만 — 그 게임에서 번 점수와 정확도 */
@@ -105,7 +106,7 @@
 
     /** 오른쪽 큰 숫자 — 전체는 총점, 게임별은 우승 횟수 */
     function rankValue(r) {
-      if (!scope) return { number: r.score, unit: '점' };
+      if (!scope || PARTY[scope]) return { number: r.score, unit: '점' };
       // 퀴즈에서 우승은 '가장 먼저 맞힌' 것이다
       return { number: scope === QUIZ.key ? r.firsts : r.wins, unit: '회' };
     }
@@ -116,7 +117,7 @@
       return ranking
         .map((r) => {
           const me = r.id === user.id ? '<span class="tag tag--me">나</span>' : '';
-          const meta = !scope ? totalMeta(r) : scope === QUIZ.key ? quizMeta(r) : timeMeta(r);
+          const meta = !scope ? totalMeta(r) : PARTY[scope] ? `참가 ${r.played}회 · ${r.score}점` : scope === QUIZ.key ? quizMeta(r) : timeMeta(r);
           const value = rankValue(r);
           return `<div class="rank">
             <div class="rank__medal">${MEDALS[r.rank] ?? r.rank}</div>
@@ -203,21 +204,21 @@
     async function load() {
       const query = scope ? `?game=${scope}` : '';
       const isQuiz = scope === QUIZ.key;
-      const game = isQuiz ? QUIZ : GAMES[scope];
+      const game = PARTY[scope] ?? (isQuiz ? QUIZ : GAMES[scope]);
 
-      el.rankingLabel.textContent = game ? `순위 · ${game.label}` : '순위 · 세 게임 합산';
-      el.subtitle.textContent = isQuiz
+      el.rankingLabel.textContent = game ? `순위 · ${game.label}` : '순위 · 다섯 게임 합산';
+      el.subtitle.textContent = PARTY[scope] ? `${game.label}의 누적 점수 순이에요.` : isQuiz
         ? '가장 먼저 맞힌 횟수를 보여 줍니다. 순위는 점수 합계 순이에요.'
         : game
           ? `${game.title} 기록만 셉니다. 1등 횟수를 보여 주고, 순위는 점수 합계 순이에요.`
-          : '오전 · 오후 · 퀴즈의 점수를 모두 합쳐서 셉니다.';
+          : '다섯 게임의 점수를 모두 합쳐서 셉니다.';
 
       el.historyLabel.textContent = isQuiz
         ? '지난 퀴즈'
         : scope ? '지난 회차' : '지난 회차 · 오전 · 오후';
 
       // 퀴즈는 날짜로 나뉘지 않아서 지난 기록도 따로 가져온다
-      const historyPath = isQuiz ? '/api/quiz/history' : `/api/history${query}`;
+      const historyPath = PARTY[scope] ? `/api/party/history${query}` : isQuiz ? '/api/quiz/history' : `/api/history${query}`;
 
       // 네트워크가 끊겨도 스켈레톤만 남지 않도록 실패를 화면에 보여 준다
       try {
@@ -226,7 +227,7 @@
           api(historyPath),
         ]);
         setHtml(el.ranking, renderRanking(ranking));
-        setHtml(el.history, isQuiz ? renderQuizHistory(history) : renderHistory(history));
+        setHtml(el.history, PARTY[scope] ? renderPartyHistory(history,scope) : isQuiz ? renderQuizHistory(history) : renderHistory(history));
       } catch (err) {
         const msg = `<p class="muted center">불러오지 못했습니다.<br />${escapeHtml(err.message)}</p>`;
         setHtml(el.ranking, msg);

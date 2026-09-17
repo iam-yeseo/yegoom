@@ -1,3 +1,4 @@
+import { PARTY_GAMES, partyKey, partyScoreMap, advanceParty } from '../lib/party.js';
 import { json, personOf, requireUser } from '../lib/util.js';
 import { closeExpiredRounds, formatDiff } from '../lib/game.js';
 import { gameInfo, gameKeyOf } from '../lib/games.js';
@@ -23,11 +24,23 @@ export async function onRequestGet(context) {
   await closeExpiredRounds(db);
 
   const raw = new URL(context.request.url).searchParams.get('game');
+  const partyGame = partyKey(raw);
+  if (partyGame) {
+    await advanceParty(db,partyGame);
+    const scores=await partyScoreMap(db,partyGame);
+    const { results: players }=await db.prepare(`SELECT * FROM users WHERE role='player'`).all();
+    const rows=players.map(p=>personOf(p,{score:scores.get(p.id)?.score ?? 0,played:scores.get(p.id)?.played ?? 0})).sort((a,b)=>b.score-a.score || a.id-b.id);
+    let rank=0;
+    rows.forEach((p,i)=>{ if (!i || p.score!==rows[i-1].score) rank=i+1; p.rank=rank; });
+    return json({ok:true,game:PARTY_GAMES[partyGame],ranking:rows});
+  }
   const isQuiz = String(raw ?? '').trim() === QUIZ.key;
   const scope = isQuiz ? null : gameKeyOf(raw);
 
   if (isQuiz) return json({ ok: true, game: quizInfo(), ranking: await quizRanking(db) });
 
+  if (!scope) await Promise.all(Object.keys(PARTY_GAMES).map(g=>advanceParty(db,g)));
+  const partyScores = scope ? new Map() : await partyScoreMap(db);
   const setter = scope ? await getSetter(db, scope) : null;
 
   const [{ results }, quizScores] = await Promise.all([
@@ -62,8 +75,10 @@ export async function onRequestGet(context) {
         quiz_score: quiz.score,
         quiz_played: quiz.played,
         quiz_firsts: quiz.firsts,
-        total_score: row.score + quiz.score,
-        total_played: row.played + quiz.played,
+        catchmind_score: partyScores.get(row.id)?.catchmind ?? 0,
+        numberluck_score: partyScores.get(row.id)?.numberluck ?? 0,
+        total_score: row.score + quiz.score + (partyScores.get(row.id)?.score ?? 0),
+        total_played: row.played + quiz.played + (partyScores.get(row.id)?.played ?? 0),
       };
     })
     // 점수 합계 -> 정확히 맞힌 횟수 -> 평균 오차 순 (오차가 없는 사람은 뒤로)
@@ -95,6 +110,8 @@ export async function onRequestGet(context) {
       morningScore: row.morning_score,
       eveningScore: row.evening_score,
       quizScore: row.quiz_score,
+      catchmindScore: row.catchmind_score,
+      numberluckScore: row.numberluck_score,
       quizSolved: quizScores.get(row.id)?.solved ?? 0,
       quizFirsts: row.quiz_firsts,
       avgDiff: row.avg_diff,

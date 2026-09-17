@@ -79,9 +79,12 @@ export const GAMES = {
     closeSeconds: 18 * 3600,
     closeLabel: '18:00',
     scoreRules: [
-      { within: 0, score: 3, label: '초까지 정확히' },
-      { within: 60, score: 2, label: '60초 이내' },
-      { within: 120, score: 1, label: '120초 이내' },
+      { within: 0, score: 10, label: '초까지 정확히' },
+      { within: 10, score: 8, label: '10초 이내' },
+      { within: 30, score: 6, label: '30초 이내' },
+      { within: 60, score: 4, label: '1분 이내' },
+      { within: 120, score: 2, label: '2분 이내' },
+      { within: 300, score: 1, label: '5분 이내' },
     ],
     // 'time' 은 출제자가 시간을 직접 적어 둔다
     answerMode: 'time',

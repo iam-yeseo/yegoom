@@ -10,10 +10,7 @@
 </head>
 <body>
   <div class="app">
-    <header class="clock">
-      <div class="clock__date" data-clock-date>&nbsp;</div>
-      <div class="clock__time" data-clock-time>--:--</div>
-    </header>
+    <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
     <h1 class="page-title">
       운영
@@ -29,6 +26,8 @@
         오후 게임의 <b>기회 횟수</b>를 바꿀 수 있습니다.
       </p>
     </section>
+
+    <section class="card" id="question-admin"></section>
 
     <div id="games">
       <div class="card"><div class="skeleton"></div></div>
@@ -54,7 +53,7 @@
   <script type="module">
     import {
       GAMES, QUIZ, api, avatarOf, escapeHtml, renderTabbar, requireLogin, revealChildren,
-      roundLabel, setHtml, startClock,
+      roundLabel, setHtml,
     } from '/js/common.js';
     import { confirmDialog, showToast } from '/js/ui.js';
 
@@ -63,9 +62,10 @@
       quiz: document.getElementById('quiz'),
     };
 
-    startClock();
+
     const user = await requireLogin({ adminOnly: true });
     renderTabbar(user);
+    await import('/js/question-admin.js');
 
     function playerRow(p, state) {
       const meta = state.revealed

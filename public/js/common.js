@@ -1,4 +1,4 @@
-// 모든 페이지가 공유하는 헬퍼 — API 호출, 상단 시계, 하단 탭바, 로그인 가드, 화면 갱신
+// 모든 페이지가 공유하는 헬퍼 — API 호출, 상단 프로필·점수, 하단 탭바, 로그인 가드, 화면 갱신
 
 /* ---------------- API ---------------- */
 
@@ -41,45 +41,31 @@ export function pageTitle(name) {
   return name ? `${name} · ${APP.name}` : APP.name;
 }
 
-/* ---------------- 시간 표시 (KST 고정) ---------------- */
+/* ---------------- 상단 프로필과 누적 점수 ---------------- */
 
-const dateFmt = new Intl.DateTimeFormat('ko-KR', {
-  timeZone: 'Asia/Seoul',
-  year: 'numeric',
-  month: 'long',
-  day: 'numeric',
-  weekday: 'long',
-});
+export function renderGnb(user) {
+  const header = document.querySelector('[data-gnb]');
+  if (!header || !user) return;
+  setHtml(header, `<a class="gnb__profile" href="/account" aria-label="내 프로필">
+    <span class="avatar-chip avatar-chip--lg">${avatarOf(user)}</span>
+    <strong>${escapeHtml(user.displayName)}</strong></a>
+    <a class="gnb__score" href="/ranking" aria-label="누적 랭킹, ${user.score ?? 0}점">
+      <small>누적 점수</small><strong>${user.score ?? 0}<span>점 ›</span></strong></a>`);
+}
 
-const timeFmt = new Intl.DateTimeFormat('ko-KR', {
-  timeZone: 'Asia/Seoul',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-});
+export async function refreshGnb() {
+  const { user } = await api('/api/me');
+  renderGnb(user);
+}
 
-const secFmt = new Intl.DateTimeFormat('ko-KR', {
-  timeZone: 'Asia/Seoul',
-  second: '2-digit',
-});
-
-/** 상단 시계를 1초마다 갱신한다. */
-export function startClock() {
-  const dateEl = document.querySelector('[data-clock-date]');
-  const timeEl = document.querySelector('[data-clock-time]');
-  if (!dateEl || !timeEl) return;
-
-  const tick = () => {
-    const now = new Date();
-    dateEl.textContent = dateFmt.format(now);
-    timeEl.innerHTML = `${timeFmt.format(now)}<small>:${secFmt.format(now).padStart(2, '0')}</small>`;
-  };
-
-  tick();
-  setInterval(tick, 1000);
-  // 백그라운드에 있다가 돌아왔을 때 바로 맞춘다
+let gnbStarted = false;
+function startGnb(user) {
+  renderGnb(user);
+  if (gnbStarted) return;
+  gnbStarted = true;
+  setInterval(() => { if (!document.hidden) refreshGnb().catch(() => {}); }, 15000);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) tick();
+    if (!document.hidden) refreshGnb().catch(() => {});
   });
 }
 
@@ -151,9 +137,9 @@ const TABS = [
   { href: GAMES.morning.path, icon: GAMES.morning.icon, label: GAMES.morning.short },
   { href: GAMES.evening.path, icon: GAMES.evening.icon, label: GAMES.evening.short },
   { href: QUIZ.path, icon: QUIZ.icon, label: QUIZ.short },
-  { href: '/ranking', icon: '🏆', label: '랭킹' },
+  { href: '/catchmind', icon: '🔮', label: '독심술사' },
   { href: '/admin', icon: '🔑', label: '운영', adminOnly: true },
-  { href: '/account', icon: '👤', label: '프로필' },
+  { href: '/numberluck', icon: '🃏', label: '숫자 고르기' },
 ];
 
 export function renderTabbar(user) {
@@ -196,6 +182,7 @@ export async function requireLogin({ adminOnly = false } = {}) {
     await new Promise(() => {});
   }
 
+  startGnb(me.user);
   return me.user;
 }
 

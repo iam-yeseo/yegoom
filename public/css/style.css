@@ -66,49 +66,6 @@ body {
   padding: 0 16px calc(96px + var(--safe-bottom));
 }
 
-/* ---------- 상단 시계 ---------- */
-
-.clock {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  margin: 0 -16px 20px;
-  padding: 18px 16px 16px;
-  text-align: center;
-  background: rgba(13, 16, 32, 0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--line);
-}
-
-.clock__date {
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.clock__time {
-  margin-top: 2px;
-  font-size: 40px;
-  font-weight: 800;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  background: linear-gradient(120deg, var(--accent-2), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* 부모의 background-clip:text 그라디언트는 opacity 를 가진 자식 글리프를 잘라내 버린다.
-   초 표시는 아예 클립에서 빼고 자기 색을 직접 갖게 한다. */
-.clock__time small {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--muted);
-  -webkit-text-fill-color: var(--muted);
-}
-
 /* ---------- 공통 요소 ---------- */
 
 .page-title {
@@ -802,7 +759,6 @@ input[type='date'] {
 @media (min-width: 600px) {
   .app { padding-left: 24px; padding-right: 24px; }
   .clock { margin-left: -24px; margin-right: -24px; padding-left: 24px; padding-right: 24px; }
-  .clock__time { font-size: 46px; }
 }
 
 /* 기기에서 '움직임 줄이기' 를 켜 둔 사람에게는 애니메이션을 전부 걷어낸다.
@@ -1572,3 +1528,47 @@ textarea:focus {
   .answer-form__field { font-size: 18px; }
   .answer-form__slot { padding: 9px 10px; }
 }
+
+/* 프로필 GNB · 회차 게임 */
+.gnb { position: sticky; top: 0; z-index: 20; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; min-height: 82px; margin: 0 -16px 20px;
+  padding: 16px; background: rgba(13,16,32,.92); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+.gnb a { color: var(--text); text-decoration: none; }
+.gnb__profile { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gnb__profile strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gnb__score { flex-shrink: 0; text-align: right; }
+.gnb__score small { display: block; color: var(--muted); font-size: 11px; }
+.gnb__score strong { color: var(--accent-2); font-size: 23px; }
+.gnb__score span { font-size: 13px; margin-left: 4px; }
+.number-cards { width: 100%; }
+.party-question { font-size: 22px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.party-status { color: var(--accent-2); font-weight: 700; }
+.party-players { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.party-player { padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
+.party-player small { display: block; margin-top: 5px; color: var(--muted); }
+.party-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.party-actions .btn { flex: 1; }
+.party-answer { padding: 16px; margin: 12px 0; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.party-answer p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.party-options { display: flex; flex-wrap: wrap; gap: 8px; border: 0; padding: 0; margin: 12px 0; }
+.party-options label { padding: 9px; border-radius: 8px; background: var(--surface-2); cursor: pointer; }
+.party-options input { width: auto; accent-color: var(--accent); }
+.party-options label:has(input:checked) { outline: 2px solid var(--accent); }
+.number-cards { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin: 18px 0; }
+.number-card { position: relative; display: grid; place-items: center; aspect-ratio: 2/3; border: 2px solid transparent;
+  border-radius: 10px; background: #f8f3e9; color: #25233a; font-size: clamp(22px,6vw,32px); font-weight: 800; cursor: pointer; }
+.number-card:nth-child(even) { color: #b83d51; }
+.number-card::before { content: '♠'; position: absolute; top: 4px; left: 6px; font-size: 12px; }
+.number-card:nth-child(even)::before { content: '♥'; }
+.number-card:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); transform: translateY(-4px); }
+.number-card input { position: absolute; opacity: 0; width: 100%; height: 100%; inset: 0; margin: 0; cursor: pointer; }
+.number-card:focus-within { outline: 3px solid var(--accent-2); outline-offset: 3px; }
+.number-card:has(input:disabled) { opacity: .6; cursor: default; }
+.party-result { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.party-result .number-card { flex: 0 0 54px; }
+.party-result p { margin: 0; overflow-wrap: anywhere; }
+.question-admin-item { border-top: 1px solid var(--line); padding: 14px 0; }
+.question-admin-item p { white-space: pre-wrap; overflow-wrap: anywhere; }
+#scope { flex-wrap: wrap; }
+@media (max-width: 360px) { .tabbar__item { font-size: 10px; } .number-cards { gap: 5px; } }
+.party-options .number-card { background: #f8f3e9; padding: 0; }

@@ -26,7 +26,7 @@
 
 import {
   QUIZ, api, avatarOf, escapeHtml, pageTitle, personChip, playOnce, renderTabbar, requireLogin,
-  revealChildren, roundLabel, setHidden, setHtml, startClock,
+  revealChildren, roundLabel, setHidden, setHtml,
 } from '/js/common.js';
 import { confirmDialog, showToast } from '/js/ui.js';
 import { shrinkPhoto } from '/js/photo-picker.js';
@@ -34,10 +34,7 @@ import { shrinkPhoto } from '/js/photo-picker.js';
 document.title = pageTitle(QUIZ.label);
 
 document.querySelector('[data-app]').innerHTML = `
-  <header class="clock">
-    <div class="clock__date" data-clock-date>&nbsp;</div>
-    <div class="clock__time" data-clock-time>--:--</div>
-  </header>
+  <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
   <div class="round-line">
     <span class="round-badge" id="round-badge">1회차</span>
@@ -242,7 +239,7 @@ const el = Object.fromEntries(
 el.questionPhoto.addEventListener('load', () => el.questionPhoto.classList.add('is-loaded'));
 el.questionPhoto.addEventListener('error', () => el.questionPhoto.classList.add('is-loaded'));
 
-startClock();
+
 const user = await requireLogin();
 renderTabbar(user);
 

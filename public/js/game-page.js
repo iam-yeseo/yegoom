@@ -15,7 +15,7 @@
 
 import {
   GAMES, api, avatarOf, escapeHtml, pageTitle, personChip, renderTabbar, requireLogin,
-  revealChildren, roundLabel, setHidden, setHtml, startClock,
+  revealChildren, roundLabel, setHidden, setHtml,
 } from '/js/common.js';
 import { confirmDialog, showToast } from '/js/ui.js';
 import { createTimeInput } from '/js/time-input.js';
@@ -29,10 +29,7 @@ const DEFAULT_GUESS = gameKey === 'morning' ? '07:00:00' : '18:00:00';
 document.title = pageTitle(GAME.label);
 
 document.querySelector('[data-app]').innerHTML = `
-  <header class="clock">
-    <div class="clock__date" data-clock-date>&nbsp;</div>
-    <div class="clock__time" data-clock-time>--:--</div>
-  </header>
+  <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
   <div class="round-line">
     <span class="round-badge" id="round-badge">1회차</span>
@@ -153,7 +150,7 @@ const el = Object.fromEntries(
   ].map((id) => [id.replace(/-(.)/g, (_, c) => c.toUpperCase()), document.getElementById(id)]),
 );
 
-startClock();
+
 const user = await requireLogin();
 renderTabbar(user);
 

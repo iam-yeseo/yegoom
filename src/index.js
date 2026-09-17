@@ -1,3 +1,5 @@
+import * as party from './routes/party.js';
+import * as partyQuestions from './routes/party-questions.js';
 // Worker 진입점.
 //
 // 정적 파일(public/)은 Cloudflare 의 assets 레이어가 먼저 처리하고,
@@ -34,6 +36,9 @@ import { migrate as runMigration, pendingMigrations } from './lib/migrate.js';
 import { json } from './lib/util.js';
 
 const ROUTES = new Map([
+  ['/api/party', party],
+  ['/api/party/history', { onRequestGet: party.history }],
+  ['/api/admin/questions', partyQuestions],
   ['/api/login', login],
   ['/api/logout', logout],
   ['/api/me', me],

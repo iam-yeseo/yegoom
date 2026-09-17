@@ -99,6 +99,10 @@ export async function pendingMigrations(db) {
   // 정답 양식 (날짜 · 시간 · 금액) — answer_type 의 CHECK 를 넓혀야 한다
   if (quizCols.length && !(await allowsAnswerForms(db))) pending.push('quiz_rounds.answer_type');
 
+  for (const table of ['catchmind_questions', 'party_rounds', 'party_lobby', 'party_players', 'party_guesses']) {
+    if (!(await columnsOf(db, table)).length) pending.push(table);
+  }
+
   // 운영자 전용 계정이 아직 없으면 계정 정리도 남아 있는 것이다
   const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
   if (seedAdmin) {
