@@ -3,20 +3,23 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d1020" />
+  <meta name="theme-color" content="#fff9eb" />
   <title>로그인 · 예굼방 아케이드 🎮</title>
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕕</text></svg>" />
+  <link rel="stylesheet" href="/css/arcade.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/arcade/icon-cat.svg" />
 </head>
 <body>
   <main class="auth">
-    <div class="auth__logo" aria-hidden="true">🕕</div>
-    <h1 class="auth__title">예굼방 아케이드 🎮</h1>
+    <div class="arcade-wordmark"><img src="/assets/arcade/icon-cat.svg" alt="" width="40" height="40" /><div><b>YEGOOM</b><small>ARCADE · 예굼방 아케이드</small></div></div>
+    <img class="auth__art" src="/assets/arcade/hero.webp" alt="게임기 앞에서 놀고 있는 고양이" width="640" height="427" />
+    <h1 class="auth__title">친구들이랑, 한 판 더!</h1>
     <p class="auth__sub">도파민에 중독된 사람들을 위한 최고의 선택</p>
 
     <p id="msg" class="msg hidden" role="alert"></p>
 
     <form id="login-form" class="card" autocomplete="on">
+      <div class="card__label">PLAYER LOGIN</div>
       <label class="field">
         <span>아이디</span>
         <input id="username" name="username" type="text" autocomplete="username"
@@ -26,7 +29,7 @@
         <span>비밀번호</span>
         <input id="password" name="password" type="password" autocomplete="current-password" required />
       </label>
-      <button id="submit" class="btn" type="submit">로그인</button>
+      <button id="submit" class="btn" type="submit">입장하기 →</button>
     </form>
 
     <p class="center muted" style="font-size: 13px">
@@ -70,7 +73,7 @@
       } catch (err) {
         showMessage(msg, err.message);
         btn.disabled = false;
-        btn.textContent = '로그인';
+        btn.textContent = '입장하기 →';
       }
     });
   </script>

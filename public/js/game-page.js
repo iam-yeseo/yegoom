@@ -18,6 +18,7 @@ import {
   revealChildren, roundLabel, setHidden, setHtml,
 } from '/js/common.js';
 import { confirmDialog, showToast } from '/js/ui.js';
+import { gameHero, illustration, stateArt, scoreCard } from '/js/arcade.js';
 import { createTimeInput } from '/js/time-input.js';
 
 const gameKey = document.body.dataset.game === 'morning' ? 'morning' : 'evening';
@@ -31,15 +32,13 @@ document.title = pageTitle(GAME.label);
 document.querySelector('[data-app]').innerHTML = `
   <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
+  ${gameHero(gameKey, { subtitle: GAME.subject, dynamic: true })}
   <div class="round-line">
     <span class="round-badge" id="round-badge">1회차</span>
     <span class="round-line__note" id="round-note">&nbsp;</span>
   </div>
-
-  <h1 class="page-title">
-    <span id="title-text" class="page-title__main">오늘의 ${GAME.subject}</span>
-    <span id="subtitle">불러오는 중…</span>
-  </h1>
+  <p id="subtitle" class="muted round-detail">불러오는 중…</p>
+  <section id="my-result" class="hidden" aria-live="polite"></section>
 
   <section id="answer-box" class="answer hidden">
     <div class="answer__label">오늘의 정답</div>
@@ -48,13 +47,14 @@ document.querySelector('[data-app]').innerHTML = `
   </section>
 
   <section id="closed-box" class="card hidden">
-    <div class="card__label">마감</div>
+    ${stateArt('closed', '오늘은 쉬어 가요.')}
     <p id="closed-text" style="margin: 0"></p>
   </section>
 
   <section id="chance-box" class="card hidden">
     <div class="card__label">기회</div>
     <p class="chance__headline" id="chance-headline">&nbsp;</p>
+    <div id="chance-tickets" class="chance-tickets" aria-label="기회 사용 현황"></div>
     <div id="chance-log"></div>
     <p class="muted" id="chance-note" style="font-size: 13px; margin: 10px 0 0"></p>
   </section>
@@ -114,6 +114,7 @@ document.querySelector('[data-app]').innerHTML = `
 
   <!-- 예측을 확정해 두고 정답이 공개되기를 기다리는 동안 -->
   <section id="wait-box" class="card wait hidden" aria-live="polite">
+    ${illustration('submitted', 'wait__art')}
     <p class="wait__title">
       <span class="wait__dots" aria-hidden="true"><i></i><i></i><i></i></span>정답 공개 대기 중
     </p>
@@ -129,17 +130,19 @@ document.querySelector('[data-app]').innerHTML = `
     </div>
   </section>
 
-  <section class="card">
-    <div class="card__label">점수</div>
+  <details class="game-rules">
+    <summary>게임 규칙 & 배점 ⌄</summary>
     <!-- 배점은 게임마다 달라서, 서버가 내려 준 배점표를 그대로 그린다 -->
     <ul class="rules" id="rules"></ul>
     <p class="muted" style="font-size: 13px; margin: 10px 0 0" id="rules-note">&nbsp;</p>
-  </section>
+  </details>
 `;
+
+document.getElementById('guess-box').after(document.getElementById('chance-box'));
 
 const el = Object.fromEntries(
   [
-    'round-badge', 'round-note', 'title-text', 'subtitle',
+    'round-badge', 'round-note', 'title-text', 'subtitle', 'my-result', 'chance-tickets',
     'answer-box', 'answer-time', 'answer-note', 'closed-box', 'closed-text',
     'guess-box', 'guess-submit', 'guess-hint', 'chips',
     'setter-box', 'setter-label', 'setter-avatar', 'setter-name', 'setter-hint',
@@ -153,6 +156,15 @@ const el = Object.fromEntries(
 
 const user = await requireLogin();
 renderTabbar(user);
+
+let guessDirty = false, answerDirty = false;
+// Track user edits independently of focus so background refreshes preserve drafts.
+document.getElementById('guess-input').addEventListener('input', () => { guessDirty = true; });
+document.getElementById('answer-input').addEventListener('input', () => { answerDirty = true; });
+document.getElementById('guess-input').addEventListener('paste', () => { guessDirty = true; });
+document.getElementById('answer-input').addEventListener('paste', () => { answerDirty = true; });
+document.getElementById('guess-input').addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) guessDirty = true; });
+document.getElementById('answer-input').addEventListener('keydown', e => { if (e.key.startsWith('Arrow')) answerDirty = true; });
 
 // 시 · 분 · 초를 숫자 키패드로 직접 찍어 넣는다 (모바일 시계형 선택기는 초를 못 고른다)
 const guessInput = createTimeInput(document.getElementById('guess-input'), {
@@ -173,7 +185,7 @@ el.chips.innerHTML =
    </button>`;
 el.chips.addEventListener('click', (e) => {
   const chip = e.target.closest('.chip');
-  if (chip) guessInput.value = chip.dataset.time;
+  if (chip) { guessInput.value = chip.dataset.time; guessDirty = true; }
 });
 
 function syncChips() {
@@ -209,6 +221,7 @@ el.guessSubmit.addEventListener('click', () => {
   if (!time) return showToast('예측할 시간을 입력해 주세요.', 'error');
   return run(el.guessSubmit, '확정 중…', async () => {
     const res = await api('/api/guess', { method: 'POST', body: { game: gameKey, time } });
+    guessDirty = false;
     showToast(`${res.guess} 로 확정했어요.`, 'ok');
   });
 });
@@ -232,6 +245,7 @@ el.record.addEventListener('click', async () => {
       method: 'POST',
       body: time ? { game: gameKey, time } : { game: gameKey },
     });
+    answerDirty = false;
     showToast(`${res.answer} 로 기록했어요. 나만 볼 수 있어요.`, 'ok');
   });
 });
@@ -303,6 +317,7 @@ function renderChances(state) {
   const on = game.useChances && (chances.total > 0 || chances.used > 0);
   setHidden(el.chanceBox, !on);
   if (!on) return;
+  setHtml(el.chanceTickets, Array.from({ length: chances.total }, (_, i) => `<span class="chance-ticket${i < chances.used ? ' is-used' : ''}">${i < chances.used ? '✓' : '★'} ${i + 1} ${i < chances.used ? '사용' : '남음'}</span>`).join(''));
 
   if (state.revealed) {
     el.chanceHeadline.textContent = `기회 ${chances.used}번을 쓰고 정답이 공개됐어요.`;
@@ -350,7 +365,7 @@ function renderSetter(state) {
 
   // 오후 게임의 시간 입력칸은 기록할 수 있을 때만 꺼내 둔다
   setHidden(el.answerInputWrap, byButton || !mine.canRecord);
-  if (recorded && !answerInput.element.contains(document.activeElement)) {
+  if (recorded && !answerDirty && !answerInput.element.contains(document.activeElement)) {
     answerInput.value = mine.answer;
   }
 
@@ -414,6 +429,11 @@ function renderSetter(state) {
 
 async function load() {
   const state = await api(`/api/today?game=${gameKey}`);
+  if (current && current.date !== state.date) {
+    guessDirty = false;
+    answerDirty = false;
+    answerInput.value = DEFAULT_GUESS;
+  }
   current = state;
   const game = state.game;
   const isPlayer = user.role === 'player';
@@ -425,7 +445,7 @@ async function load() {
 
   // 누구의 시간을 맞히는 게임인지 — 출제자 프로필 사진과 함께 보여 준다
   setHtml(el.titleText, state.setter
-    ? `${personChip(state.setter, 'avatar-chip--lg')} 님의 ${escapeHtml(game.subject)}`
+    ? `${escapeHtml(state.setter.displayName)}의 ${escapeHtml(game.subject)}`
     : `오늘의 ${escapeHtml(game.subject)}`);
 
   if (state.revealed) {
@@ -440,6 +460,12 @@ async function load() {
       `정답 공개 대기 중 · ${state.submitted}/${state.players.length}명 확정`;
   }
 
+  // Only public results can drive reward art; recording status stays setter-only.
+  const myResult = state.revealed ? state.players.find(p => p.isMe && p.submitted) : null;
+  setHidden(el.myResult, !myResult);
+  if (myResult) setHtml(el.myResult, scoreCard(myResult.score, [
+    ['오늘의 정답', state.answer], ['내 예측', myResult.guess], ['오차', myResult.diffText],
+  ], { loss: !myResult.score }));
   // 정답 카드
   setHidden(el.answerBox, !state.revealed);
   if (state.revealed) {
@@ -470,10 +496,10 @@ async function load() {
 
   if (canGuess) {
     // 입력 중인 값을 덮어쓰지 않도록, 아직 손대지 않았을 때만 서버 값을 넣는다
-    if (!guessInput.element.contains(document.activeElement)) {
+    if (!guessDirty && !guessInput.element.contains(document.activeElement)) {
       guessInput.value = state.myGuess ?? DEFAULT_GUESS;
     }
-    el.guessSubmit.textContent = state.myGuess ? '다시 확정하기' : '확정하기';
+    el.guessSubmit.textContent = state.myGuess ? '다시 확정하기' : '예측 확정하기';
     // 기회가 걸린 게임에서는 남은 기회를 예측칸 바로 아래에도 적어 준다
     const left = game.useChances ? state.chances.remaining : 0;
     el.guessHint.textContent = game.useChances && state.chances.used

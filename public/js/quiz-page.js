@@ -29,6 +29,7 @@ import {
   revealChildren, roundLabel, setHidden, setHtml,
 } from '/js/common.js';
 import { confirmDialog, showToast } from '/js/ui.js';
+import { gameHero, illustration, scoreCard } from '/js/arcade.js';
 import { shrinkPhoto } from '/js/photo-picker.js';
 
 document.title = pageTitle(QUIZ.label);
@@ -36,19 +37,14 @@ document.title = pageTitle(QUIZ.label);
 document.querySelector('[data-app]').innerHTML = `
   <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
-  <div class="round-line">
-    <span class="round-badge" id="round-badge">1회차</span>
-    <span class="round-line__note" id="round-note">&nbsp;</span>
-  </div>
-
-  <h1 class="page-title">
-    <span class="page-title__main">${QUIZ.icon} ${QUIZ.label}</span>
-    <span id="subtitle">불러오는 중…</span>
-  </h1>
+  ${gameHero('quiz')}
+  <div class="round-line"><span class="round-badge" id="round-badge">1회차</span><span class="round-line__note" id="round-note">&nbsp;</span></div>
+  <p id="subtitle" class="muted round-detail">불러오는 중…</p>
+  <section id="my-result" class="hidden" aria-live="polite"></section>
 
   <!-- 지금 누가 문제를 낼 차례인지 -->
   <section id="turn-box" class="card hidden">
-    <div class="card__label">출제 차례</div>
+    ${illustration('turn', 'turn-art')}<div class="card__label">출제 차례</div>
     <div class="profile-preview" style="padding-bottom: 0; border: none">
       <div class="profile-preview__avatar" id="turn-avatar" aria-hidden="true">🙂</div>
       <div>
@@ -109,6 +105,7 @@ document.querySelector('[data-app]').innerHTML = `
   <!-- 힌트 -->
   <section id="hint-box" class="card hidden">
     <div class="card__label">힌트</div>
+    <div id="hint-envelopes" class="hint-envelopes"></div>
     <div id="hint-list"></div>
     <button id="hint-open" class="btn btn--ghost hidden" type="button" style="margin-top: 12px">
       힌트 열기
@@ -206,11 +203,11 @@ document.querySelector('[data-app]').innerHTML = `
     </div>
   </section>
 
-  <section class="card">
-    <div class="card__label">점수</div>
+  <details class="game-rules">
+    <summary>게임 규칙 · 점수 안내</summary>
     <ul class="rules" id="rules"></ul>
     <p class="muted" style="font-size: 13px; margin: 10px 0 0" id="rules-note">&nbsp;</p>
-  </section>
+  </details>
 `;
 
 const el = Object.fromEntries(
@@ -223,7 +220,7 @@ const el = Object.fromEntries(
     'answer-box', 'answer-text', 'answer-note',
     'play-box', 'play-score', 'play-score-note', 'play-input-wrap', 'play-answer', 'play-ox',
     'play-form', 'play-submit', 'play-log',
-    'hint-box', 'hint-list', 'hint-open', 'hint-note',
+    'hint-box', 'hint-list', 'hint-open', 'hint-note', 'hint-envelopes', 'my-result',
     'setter-box', 'setter-answer', 'setter-hints', 'close-quiz', 'drop-quiz', 'setter-note',
     'compose-box', 'mode-pick', 'mode-note', 'time-pick',
     'type-pick', 'type-note', 'c-question', 'c-photo-preview', 'c-photo-pick',
@@ -932,6 +929,10 @@ setInterval(tickTimer, 1000);
 /** 정답 공개 (끝난 뒤) */
 function renderAnswer(state) {
   const { quiz, me } = state;
+  setHidden(el.myResult, !me?.solved);
+  if (me?.solved) setHtml(el.myResult, scoreCard(me.score, [
+    ['정답 순서', me.rank + '번째'], ['사용한 힌트', me.hintsUsed + '단계'], ['오답', me.wrongs + '회'],
+  ], { title: me.rank === 1 ? '첫 정답 성공!' : '정답 성공!' }));
   const show = !!quiz?.closed;
   setHidden(el.answerBox, !show);
   if (!show) return;
@@ -1018,6 +1019,10 @@ function renderHints(state) {
   if (!on) return;
 
   const opened = me.hints ?? [];
+  setHtml(el.hintEnvelopes, Array.from({ length: 3 }, (_, i) => {
+    const open = i < opened.length, available = i < quiz.hintCount;
+    return `<div class="hint-envelope${open ? ' is-open' : !available ? ' is-unavailable' : ''}"><strong aria-hidden="true">${open ? '✓' : '✉'}</strong><small>${i + 1}단계 · ${open ? '열림' : available ? '−' + state.game.hintPenalties[i] : '없음'}</small></div>`;
+  }).join(''));
   setHtml(el.hintList, opened.length
     ? opened
         .map(

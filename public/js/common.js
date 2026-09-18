@@ -48,9 +48,9 @@ export function renderGnb(user) {
   if (!header || !user) return;
   setHtml(header, `<a class="gnb__profile" href="/account" aria-label="내 프로필">
     <span class="avatar-chip avatar-chip--lg">${avatarOf(user)}</span>
-    <strong>${escapeHtml(user.displayName)}</strong></a>
+    <span class="gnb__name"><small>${user.role === 'admin' ? 'OPERATOR' : 'PLAYER'}</small><strong>${escapeHtml(user.displayName)}</strong></span></a>
     <a class="gnb__score" href="/ranking" aria-label="누적 랭킹, ${user.score ?? 0}점">
-      <small>누적 점수</small><strong>${user.score ?? 0}<span>점 ›</span></strong></a>`);
+      <strong>★ ${user.score ?? 0}<span>점 ›</span></strong></a>`);
 }
 
 export async function refreshGnb() {
@@ -134,11 +134,11 @@ export function currentGameKey(now = new Date()) {
 
 // 운영자와 플레이어 모두 같은 다섯 게임 탭을 사용한다.
 const TABS = [
-  { href: GAMES.morning.path, icon: GAMES.morning.icon, label: GAMES.morning.short },
-  { href: GAMES.evening.path, icon: GAMES.evening.icon, label: GAMES.evening.short },
-  { href: QUIZ.path, icon: QUIZ.icon, label: QUIZ.short },
-  { href: '/catchmind', icon: '🔮', label: '독심술사' },
-  { href: '/numberluck', icon: '🃏', label: '숫자 고르기' },
+  { href: '/morning', icon: 'morning', label: '기상' },
+  { href: '/evening', icon: 'evening', label: '퇴근' },
+  { href: '/quiz', icon: 'quiz', label: '퀴즈' },
+  { href: '/catchmind', icon: 'mind', label: '독심술사' },
+  { href: '/numberluck', icon: 'number', label: '숫자' },
 ];
 
 export function renderTabbar(user) {
@@ -149,7 +149,7 @@ export function renderTabbar(user) {
   nav.innerHTML = TABS.filter((t) => !t.adminOnly || user?.role === 'admin')
     .map(
       (t) => `<a class="tabbar__item" href="${t.href}"${here === t.href ? ' aria-current="page"' : ''}>
-        <span class="tabbar__icon" aria-hidden="true">${t.icon}</span>${t.label}
+        <span class="tabbar__icon" aria-hidden="true"><img src="/assets/arcade/icon-${t.icon}.svg" width="24" height="24" alt="" /></span>${t.label}
       </a>`,
     )
     .join('');

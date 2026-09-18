@@ -3,9 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d1020" />
+  <meta name="theme-color" content="#fff9eb" />
   <title>독심술사 · 예굼방 아케이드 🎮</title>
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/arcade.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/arcade/icon-cat.svg" />
 </head>
 <body data-party="catchmind">
   <main class="app">
@@ -13,11 +15,11 @@
     <h1 class="page-title">🔮 독심술사<span>답변 속에 숨어 있는 친구를 찾아요</span></h1>
     <section class="card" id="party-info"><p>게임을 불러오는 중이에요.</p></section>
     <section class="card hidden" id="party-play"></section>
-    <section class="card"><h2 class="card__label">게임 안내</h2>
+    <details class="game-rules"><summary>게임 규칙 & 배점 ⌄</summary>
       <p class="muted">2명이 하고 싶어요를 누르면 시작해요. 3명 이상 준비 완료하면 3분 뒤 공개해요.
       공개 전까지 추가로 참여할 수 있어요. 공개 시 준비를 마친 사람만 이번 회차에 참여해요.</p>
       <p class="muted" id="party-rules"></p>
-    </section>
+    </details>
     <section class="card"><h2 class="card__label">지난 회차</h2><div id="party-history"></div></section>
   </main>
   <nav class="tabbar" data-tabbar aria-label="주요 메뉴"></nav>
