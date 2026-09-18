@@ -1,6 +1,7 @@
 import { escapeHtml,personChip } from './common.js';
+import { stateArt } from './arcade.js';
 export function renderPartyHistory(history,game) {
-  if (!history.length) return '<p class="muted">아직 끝난 회차가 없어요.</p>';
+  if (!history.length) return stateArt('empty','첫 기록의 주인공은?','한 판을 마치면 기록이 여기에 쌓여요.');
   return history.map(h=>`<div class="history-item"><b>${h.roundNo}회차</b>
     ${game==='catchmind' ? `<p class="party-question">${escapeHtml(h.question)}</p>` : ''}
     ${h.entries.map(p=>`<p>${personChip(p)} · ${game==='catchmind'

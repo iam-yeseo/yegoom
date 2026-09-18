@@ -19,7 +19,7 @@ export async function mountAdminGame(user, key) {
   document.title = pageTitle(`${game.label} 운영`);
   app.innerHTML = `
     <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
-    <h1 class="page-title">${game.icon} ${escapeHtml(game.label)} 운영
+    <h1 class="page-title admin-title"><img src="/assets/arcade/icon-${key==='catchmind'?'mind':key==='numberluck'?'number':key}.svg" width="28" height="28" alt="" /> ${escapeHtml(game.label)} 운영
       <span>운영자 전용 · ${key === 'catchmind' ? '질문 관리와 회차 현황' : '게임 현황과 설정'}</span></h1>
     ${key === 'catchmind' ? '<section class="card" id="question-admin"></section>' : ''}
     ${!isParty ? '<section class="card" id="game-settings"><p class="muted">설정을 불러오는 중…</p></section>' : ''}

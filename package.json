@@ -14,9 +14,10 @@
     "db:seed:local": "wrangler d1 execute toigeun-db --local --file=./seed-users.sql",
     "db:seed": "wrangler d1 execute toigeun-db --remote --file=./seed-users.sql",
     "users": "node scripts/create-users.mjs",
-    "test": "node --test tests/*.test.js"
+    "test": "node --experimental-vm-modules --test tests/*.test.js"
   },
   "devDependencies": {
+    "jsdom": "^30.1.0",
     "miniflare": "5.20260916.0-alpha",
     "wrangler": "^4.133.0"
   }

@@ -3,19 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0d1020" />
+  <meta name="theme-color" content="#fff9eb" />
   <title>랭킹 · 예굼방 아케이드 🎮</title>
   <link rel="stylesheet" href="/css/style.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏆</text></svg>" />
+  <link rel="stylesheet" href="/css/arcade.css" />
+  <link rel="icon" type="image/svg+xml" href="/assets/arcade/icon-cat.svg" />
 </head>
 <body>
   <div class="app">
     <header class="gnb" data-gnb aria-label="내 프로필과 점수"></header>
 
     <h1 class="page-title">
-      누적 랭킹
+      예굼방 명예의 전당
       <span id="subtitle">다섯 게임의 점수를 모두 합쳐서 셉니다.</span>
     </h1>
+
+    <section id="my-rank" aria-live="polite"></section>
 
     <!-- 다섯 게임을 합쳐서, 또는 한 게임만 따로 볼 수 있다 -->
     <div class="segmented" role="tablist" aria-label="게임 고르기" id="scope">
@@ -23,13 +26,13 @@
         전체
       </button>
       <button class="segmented__item" type="button" role="tab" data-scope="morning"
-              aria-selected="false">🌅 오전</button>
+              aria-selected="false">기상</button>
       <button class="segmented__item" type="button" role="tab" data-scope="evening"
-              aria-selected="false">🌆 오후</button>
+              aria-selected="false">퇴근</button>
       <button class="segmented__item" type="button" role="tab" data-scope="quiz"
-              aria-selected="false">🧠 퀴즈</button>
-      <button class="segmented__item" type="button" role="tab" data-scope="catchmind" aria-selected="false">🔮 독심술사</button>
-      <button class="segmented__item" type="button" role="tab" data-scope="numberluck" aria-selected="false">🃏 숫자 고르기</button>
+              aria-selected="false">퀴즈</button>
+      <button class="segmented__item" type="button" role="tab" data-scope="catchmind" aria-selected="false">독심술사</button>
+      <button class="segmented__item" type="button" role="tab" data-scope="numberluck" aria-selected="false">숫자</button>
     </div>
 
     <section class="card">
@@ -55,6 +58,7 @@
       renderTabbar, requireLogin, revealChildren, roundLabel, setHtml,
     } from '/js/common.js';
 
+    import { illustration, stateArt } from '/js/arcade.js';
     import { renderPartyHistory } from '/js/party-history.js';
     const PARTY = { catchmind: {label:'독심술사'},numberluck:{label:'숫자 고르기'} };
     const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
@@ -112,7 +116,7 @@
     }
 
     function renderRanking(ranking) {
-      if (!ranking.length) return '<p class="muted center">아직 등록된 플레이어가 없어요.</p>';
+      if (!ranking.length) return stateArt('empty','첫 기록의 주인공은?','아직 등록된 플레이어가 없어요.');
 
       return ranking
         .map((r) => {
@@ -134,7 +138,7 @@
 
     /** 지난 퀴즈 — 문제와 정답, 그리고 가장 먼저 맞힌 사람 */
     function renderQuizHistory(history) {
-      if (!history.length) return '<p class="muted center">아직 끝난 퀴즈가 없어요.</p>';
+      if (!history.length) return stateArt('empty','기록장이 비어 있어요.','퀴즈를 마치면 여기에 기록돼요.');
 
       return history
         .map((h) => {
@@ -165,7 +169,7 @@
     }
 
     function renderHistory(history) {
-      if (!history.length) return '<p class="muted center">아직 끝난 회차가 없어요.</p>';
+      if (!history.length) return stateArt('empty','기록장이 비어 있어요.','한 판을 마치면 여기에 기록돼요.');
 
       return history
         .map((h) => {
@@ -226,6 +230,8 @@
           api(`/api/ranking${query}`),
           api(historyPath),
         ]);
+        const me = ranking.find(r => r.id === user.id);
+        setHtml(document.getElementById('my-rank'), me ? `<div class="arcade-result"><div class="card__label">MY RANK</div><div class="arcade-result__hero"><div><strong>${ranking.filter(r=>r.rank===me.rank).length>1?'공동 ':''}${me.rank}<small>위</small></strong><p>${escapeHtml(user.displayName)} · ${me.score}점</p></div>${illustration('rank')}</div></div>` : '');
         setHtml(el.ranking, renderRanking(ranking));
         setHtml(el.history, PARTY[scope] ? renderPartyHistory(history,scope) : isQuiz ? renderQuizHistory(history) : renderHistory(history));
       } catch (err) {

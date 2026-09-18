@@ -1,12 +1,16 @@
 import { api,escapeHtml,personChip,requireLogin,renderTabbar,setHtml,setHidden,refreshGnb } from './common.js';
 import { showToast,confirmDialog } from './ui.js';
+import { gameHero, gameSteps, stateArt, scoreCard } from './arcade.js';
 import { renderPartyHistory } from './party-history.js';
 
 const game=document.body.dataset.party, catchmind=game==='catchmind';
+document.querySelector('.page-title').outerHTML=gameHero(game);
 const user=await requireLogin();
 renderTabbar(user);
 const info=document.getElementById('party-info'),play=document.getElementById('party-play');
 const history=document.getElementById('party-history');
+const roster=document.createElement('section');
+roster.className='card';roster.id='party-roster';play.after(roster);
 document.getElementById('party-rules').textContent=catchmind
   ? '작성 완료와 준비 완료는 별도예요. 공개된 답변마다 작성자를 한 명씩 골라 확정하세요. 본인 답변은 맞힐 수 없어요. 맞힌 사람당 1점, 3명 이상 맞히면 보너스 2점!'
   : '숫자 선택을 확정하고 준비 완료를 눌러 주세요. 중복 숫자는 탈락! 나머지는 큰 숫자부터 1등 5점 · 2등 3점 · 3등 2점 · 4등 1점을 받아요.';
@@ -19,46 +23,47 @@ function render() {
   const closed=!round || round.state==='closed';
   const playing=user.role==='player';
   const joined=lobby.some(p=>p.id===user.id);
-  setHtml(info,`<div class="card__label">${round ? `${round.roundNo}회차` : '첫 회차를 기다려요'}</div>
-    <p class="party-status">${closed ? '함께할 친구를 모으고 있어요' : round.state==='guessing' ? '이 답변은 누구의 생각일까요?' : '나만의 답변을 준비해요'}</p>
+  setHtml(info,`<div class="card__label">${round ? `${round.roundNo}회차` : '다음 회차'}</div>
+    ${closed ? stateArt(catchmind && state.available===0 ? 'empty' : 'lobby', catchmind && state.available===0 ? '질문 충전 중!' : '같이 한 판 할래?', `참가 희망 ${lobby.length}명 / 2명이 모이면 시작해요.`) : ''}
     ${round?.question ? `<p class="party-question">${escapeHtml(round.question)}</p>` : ''}
-    ${!closed ? `<p id="party-countdown" class="muted"></p>
-      <div class="party-players">${players.map(p=>`<div class="party-player">${personChip(p)}<small>${p.confirmed?'확정 완료':p.ready?'준비 완료':'준비 중'}</small></div>`).join('')}</div>` :
-      `<p class="muted">다음 회차 참가 희망 ${lobby.length}명 / 시작에 필요한 인원 2명</p>
-      <div class="party-players">${lobby.map(p=>personChip(p)).join(' ')}</div>
-      ${catchmind && state.available===0 ? '<p class="muted">사용하지 않은 질문이 없어요. 운영자가 질문을 추가하면 다시 하고 싶어요를 눌러 주세요.</p>' : ''}`}
+    ${!closed ? '<p id="party-countdown" class="muted"></p>' : ''}
+    ${catchmind && closed && state.available===0 ? '<p class="muted">운영자가 질문을 추가하면 다시 하고 싶어요를 눌러 주세요.</p>' : ''}
     ${playing && closed ? button(joined?'leave':'join',joined?'참여 대기 취소':'하고 싶어요') : ''}
     ${playing && closed && joined && lobby.length>=2 && state.available>0 ? button('join','다음 회차 시작하기') : ''}
     ${playing && !closed && !mine && round.state==='answering' ? button('join','이번 회차 참여하기') : ''}
     ${!playing ? '<p class="muted">운영자는 게임을 지켜볼 수 있어요.</p>' : ''}`);
+  const rosterPlayers=closed?lobby:players;
+  setHidden(roster, !rosterPlayers.length);
+  setHtml(roster,`<h2 class="card__label">${closed?'다음 판 참가자':'함께 플레이 중'}</h2><div class="party-players">${rosterPlayers.map(p=>`<div class="party-player">${personChip(p)}${p.id===user.id?' <span class="tag tag--me">나</span>':''}<small>${closed?'참여 대기':p.confirmed?'✓ 추측 확정':p.ready?'✓ 준비 완료':'준비 중'}</small></div>`).join('')}</div>`);
   tick();
   // 참가자의 준비 상태만 변해도 입력칸/라디오 선택과 초점은 그대로 유지한다.
   const nextKey=JSON.stringify([round?.id,round?.state,mine,state.answers]);
   if (nextKey===viewKey) return;
-  const changedRound=state.round?.id!==play.dataset.round;
+  const changedRound=String(state.round?.id ?? '')!==play.dataset.round;
   if (changedRound) { answerDraft=mine?.answer ?? ''; numberDraft=mine?.number ?? null; guesses={}; }
   play.dataset.round=round?.id ?? '';
   viewKey=nextKey;
   setHidden(play,!round);
   if (!round) return;
   if (round.state==='closed') {
-    setHtml(play,`<h2 class="card__label">결과 공개</h2>${players.filter(p=>p.ready).map(p=>`<div class="party-result">
-      ${catchmind?'':`<span class="number-card">${p.number}</span>`}<div>${personChip(p)}
+    const me=players.find(p=>p.id===user.id&&p.ready);
+    setHtml(play,`${me?scoreCard(me.score,catchmind?[["맞힌 사람",me.correctCount+"명"],["보너스",me.correctCount>=3?"+2점":"없음"]]:[["내 숫자",me.number],["결과",me.place?me.place+"등 · 생존":"중복 탈락"]],{loss:!catchmind&&!me.place}):''}<h2 class="card__label">전체 결과</h2>${players.filter(p=>p.ready).map(p=>`<div class="party-result">
+      ${catchmind?'':`<span class="number-card ${p.place?'number-card--survivor':'number-card--duplicate'}">${p.number}</span>`}<div>${personChip(p)}
       <p>${catchmind ? `${escapeHtml(p.answer)} · 맞힌 사람 ${p.correctCount}명` : p.place ? `${p.place}등` : '중복 탈락'} · <b>+${p.score}점</b></p></div></div>`).join('')}`);
   } else if (round.state==='answering' && mine) {
     setHtml(play,catchmind
-      ? `<label for="party-answer">내 답변</label><textarea id="party-answer" rows="4" maxlength="500" ${mine.ready?'disabled':''}>${escapeHtml(answerDraft)}</textarea>
+      ? `${gameSteps(!!mine.answer,mine.ready)}${mine.ready?stateArt('submitted','마음 봉인 완료!','공개 전까지 내 답변만 볼 수 있어요.'):''}<label for="party-answer">내 답변 · 최대 500자</label><textarea id="party-answer" rows="4" maxlength="500" ${mine.ready?'disabled':''}>${escapeHtml(answerDraft)}</textarea>
         <p class="muted">${mine.ready?'준비 완료! 답변 공개를 기다려 주세요.':mine.answer?'작성한 답변을 저장했어요. 준비 완료를 눌러 주세요.':'작성 완료를 눌러 답변을 저장하세요.'}</p>
         <div class="party-actions">${button('answer','작성 완료',mine.ready || !answerDraft.trim())}${button('ready','준비 완료',mine.ready || !mine.answer || answerDraft.trim()!==mine.answer)}</div>`
-      : `<fieldset class="party-options"><legend>내 카드 고르기</legend><div class="number-cards">${Array.from({length:10},(_,i)=>i+1).map(n=>`<label class="number-card">${n}<input type="radio" name="number" value="${n}" aria-label="${n}" ${numberDraft===n?'checked':''} ${mine.ready?'disabled':''}></label>`).join('')}</div></fieldset>
+      : `${gameSteps(mine.number!=null,mine.ready,'카드 선택')}${mine.ready?stateArt('submitted','내 카드는 비밀!','준비 완료 후에는 바꿀 수 없어요.'):''}<fieldset class="party-options"><legend>1–10 중 카드 한 장</legend><div class="number-cards">${Array.from({length:10},(_,i)=>i+1).map(n=>`<label class="number-card">${n}<input type="radio" name="number" value="${n}" aria-label="${n}" ${numberDraft===n?'checked':''} ${mine.ready?'disabled':''}></label>`).join('')}</div></fieldset>
         <p class="muted">${mine.ready?'준비 완료! 카드를 공개할 때까지 기다려 주세요.':mine.number?'숫자를 저장했어요. 준비 완료를 눌러 주세요.':'카드 한 장을 선택하세요.'}</p>
         <div class="party-actions">${button('answer','선택 확정',mine.ready || numberDraft===null)}${button('ready','준비 완료',mine.ready || mine.number===null || numberDraft!==mine.number)}</div>`);
   } else if (round.state==='guessing') {
     const canGuess=playing && mine?.ready && !mine.confirmed;
-    setHtml(play,`<h2 class="card__label">익명 답변</h2><p class="muted">${mine?.confirmed?'확정 완료! 다른 친구들을 기다려요.':canGuess?'내 답변을 제외하고 작성자를 한 명씩 골라 주세요.':'이번 회차를 관전 중이에요.'}</p>
-      ${state.answers.map((a,i)=>`<article class="party-answer"><b>답변 ${i+1}${a.own?' · 내 답변':''}</b><p>${escapeHtml(a.text)}</p>
+    setHtml(play,`${mine?.confirmed?stateArt('submitted','추측도 봉인 완료.','모두 확정하면 결과가 공개돼요.'):''}<h2 class="card__label">이 말, 누가 했을까?</h2><p class="muted">${mine?.confirmed?'확정 완료! 다른 친구들을 기다려요.':canGuess?'내 답변을 제외하고 작성자를 한 명씩 골라 주세요.':'이번 회차를 관전 중이에요.'}</p>
+      ${state.answers.map((a,i)=>`<article class="party-answer${a.own?' party-answer--own':''}"><b>익명 답변 ${i+1}${a.own?' · 내 답변 / 추측 불가':''}</b><p>${escapeHtml(a.text)}</p>
         ${canGuess && !a.own ? `<fieldset class="party-options"><legend class="muted">누구의 답변일까요?</legend>${players.filter(p=>p.ready&&p.id!==user.id).map(p=>`<label><input type="radio" name="${a.id}" value="${p.id}" ${guesses[a.id]===p.id?'checked':''}> ${escapeHtml(p.displayName)}</label>`).join('')}</fieldset>`:''}</article>`).join('')}
-      ${canGuess?button('confirm','확정하기',!allGuessed()):''}`);
+      ${canGuess?button('confirm','전체 추측 확정',!allGuessed()):''}`);
   } else setHtml(play,'<p class="muted">참여 후 답변을 작성할 수 있어요.</p>');
 }
 function allGuessed() { return state.answers.filter(a=>!a.own).every(a=>guesses[a.id]); }
