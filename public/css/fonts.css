@@ -1,41 +1,33 @@
-/* Cafe24 PRO Slim: supplied WOFF2 files, Hangul only.
-   Air: secondary copy; Fit: body/actions; Max: headings/emphasis.
-   Static faces cover existing UI weights without synthetic bold. Latin,
-   numbers, punctuation and symbols continue using the original fonts below. */
+/* Supplied Tmoney RoundWind OTFs, packaged as WOFF2 with original outlines.
+   Korean only: Regular for body/captions; ExtraBold for actions/headings.
+   Existing English font choices remain below. */
 @font-face {
-  font-family: 'Cafe24 PRO Slim KR';
+  font-family: 'Tmoney RoundWind KR';
   font-style: normal;
   font-display: swap;
-  font-weight: 100 399;
-  src: url('../assets/fonts/Cafe24PROSlimAir.woff2') format('woff2');
+  font-weight: 100 599;
+  src: url('../assets/fonts/TmoneyRoundWindRegular.woff2') format('woff2');
   unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
 }
 
 @font-face {
-  font-family: 'Cafe24 PRO Slim KR';
+  font-family: 'Tmoney RoundWind KR';
   font-style: normal;
   font-display: swap;
-  font-weight: 400 799;
-  src: url('../assets/fonts/Cafe24PROSlimFit.woff2') format('woff2');
+  font-weight: 600 900;
+  src: url('../assets/fonts/TmoneyRoundWindExtraBold.woff2') format('woff2');
   unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
 }
 
+/* Every digit uses the existing variable font, including digits embedded
+   in Korean/English copy, buttons, forms, scores and history. */
 @font-face {
-  font-family: 'Cafe24 PRO Slim KR';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 800 900;
-  src: url('../assets/fonts/Cafe24PROSlimMax.woff2') format('woff2');
-  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
-}
-
-@font-face {
-  font-family: 'Cafe24 PRO Slim Air KR';
+  font-family: 'Outfit Digits';
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
-  src: url('../assets/fonts/Cafe24PROSlimAir.woff2') format('woff2');
-  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+  src: url('../assets/fonts/outfit-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0030-0039;
 }
 
 /* noto-sans-kr-[0]-wght-normal */
