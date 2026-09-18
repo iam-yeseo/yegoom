@@ -65,7 +65,7 @@ input[type='date'] { color-scheme: light; }
 .game-hero__kicker { font-size: 12px; font-weight: 700; margin: 0 0 8px; line-height: 1.5; overflow-wrap: anywhere; }
 .game-hero__title { font-size: clamp(24px, 6.7vw, 30px); font-weight: 900; line-height: 1.3; letter-spacing: -.045em; margin: 0; }
 .arcade-art { display: block; width: 120px; height: 108px; object-fit: contain; flex-shrink: 0; }
-.game-hero__art { width: 45%; height: 128px; border-radius: 8px; mix-blend-mode: multiply; }
+.game-hero__art { width: 45%; height: 128px; border-radius: 8px; }
 .round-line { background: var(--game-color); padding: 8px; border: 2px solid var(--line); border-radius: 12px; margin: 0 0 12px; gap: 8px; }
 .round-badge { padding: 0; color: var(--text); background: none; border: none; font-size: 12px; }
 .round-line__note { font-size: 12px; font-weight: 700; color: var(--text); }
@@ -105,7 +105,7 @@ input:disabled, textarea:disabled { opacity: 1; color: var(--muted); background:
 .arcade-state > div { flex: 1; min-width: 0; }
 .arcade-state h2 { font-size: 18px; line-height: 1.4; margin: 0 0 8px; overflow-wrap: anywhere; }
 .arcade-state p { color: var(--muted); font-size: 13px; margin: 0; overflow-wrap: anywhere; }
-.arcade-state .arcade-art { width: 100px; height: 100px; object-fit: contain; mix-blend-mode: multiply; }
+.arcade-state .arcade-art { width: 100px; height: 100px; object-fit: contain; }
 .wait { background: var(--bg); }
 .wait__dots { display: none; }
 .answer { background: var(--game-color); color: var(--text); border: 2px solid var(--line); box-shadow: var(--shadow); border-radius: 12px; padding: 16px; }
@@ -119,7 +119,6 @@ input:disabled, textarea:disabled { opacity: 1; color: var(--muted); background:
 .arcade-result__hero strong { font-size: 40px; line-height: 1.1; font-weight: 900; }
 .arcade-result__hero strong small { font-size: 24px; }
 .arcade-result__hero p { font-size: 12px; font-weight: 700; margin: 8px 0 0; }
-.arcade-result__hero .arcade-art { mix-blend-mode: multiply; }
 .arcade-result dl { margin: 12px 0 0; }
 .arcade-result dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 5px 0; font-size: 13px; }
 .arcade-result dt { color: var(--muted); flex-shrink: 0; }
@@ -147,7 +146,7 @@ input:disabled, textarea:disabled { opacity: 1; color: var(--muted); background:
 .arcade-wordmark img { width: 40px; height: 40px; }
 .arcade-wordmark b { display: block; font-size: 36px; letter-spacing: -.05em; line-height: 1.1; font-weight: 900; }
 .arcade-wordmark small { display: block; font-size: 11px; font-weight: 700; }
-.auth__art { display: block; width: 100%; height: 228px; object-fit: contain; margin: 12px 0; mix-blend-mode: multiply; }
+.auth__art { display: block; width: 100%; height: 228px; object-fit: contain; margin: 12px 0; }
 .auth__title, .auth__sub { text-align: left; }
 .auth__title { font-size: 26px; margin: 12px 0 6px; }
 .auth__sub { font-size: 13px; margin-bottom: 20px; }
@@ -252,11 +251,11 @@ input:disabled, textarea:disabled { opacity: 1; color: var(--muted); background:
   .number-card:has(input:checked), .btn:active:not(:disabled), .chip:active:not(:disabled) { transform: none; }
 }
 
-body { font-family: 'Noto Sans KR Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
-.time-input__field, .number-card, .arcade-result__hero strong, .quiz-timer__value, .arcade-wordmark b, .rank__wins b { font-family: 'Outfit Variable', 'Noto Sans KR Variable', sans-serif; }
-.wait__art { float: right; width: 96px; height: 96px; margin: 0 0 4px 8px; mix-blend-mode: multiply; }
+body { font-family: 'Cafe24 PRO Slim KR', 'Noto Sans KR Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+.time-input__field, .number-card, .arcade-result__hero strong, .quiz-timer__value, .arcade-wordmark b, .rank__wins b { font-family: 'Cafe24 PRO Slim KR', 'Outfit Variable', 'Noto Sans KR Variable', sans-serif; }
+.wait__art { float: right; width: 96px; height: 96px; margin: 0 0 4px 8px; }
 .wait::after { content: ''; display: block; clear: both; }
-.turn-art { float: right; width: 92px; height: 88px; mix-blend-mode: multiply; }
+.turn-art { float: right; width: 92px; height: 88px; }
 #turn-box::after { content: ''; display: block; clear: both; }
 .admin-title > img { vertical-align: middle; }
 #party-play > .arcade-result { box-shadow: none; }
@@ -267,3 +266,15 @@ body { font-family: 'Noto Sans KR Variable', -apple-system, BlinkMacSystemFont, 
 }
 .answer-form input.answer-form__field { border: 0; background: transparent; padding: 0; font-size: 20px; box-shadow: none; }
 @media (max-width: 360px) { .time-input input.time-input__field { font-size: 30px; } }
+
+/* Air is reserved for secondary Korean copy. Keeping the existing CSS weights
+   lets Latin text retain its original Noto/Outfit appearance. */
+.auth__sub, .page-title > span:not(.page-title__main), .arcade-state p,
+.round-detail, .round-line__note, .wait__note, .secret__note,
+.player__meta, .rank__meta, .history-item__winners, .cropper__hint,
+.game-rules, .admin-note, .question-list-note, p.muted {
+  font-family: 'Cafe24 PRO Slim Air KR', 'Noto Sans KR Variable', -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
+}
+/* Keep expandable action labels distinct from the lighter guidance. */
+.game-rules > summary { font-family: 'Cafe24 PRO Slim KR', 'Noto Sans KR Variable', sans-serif; }

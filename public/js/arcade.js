@@ -10,7 +10,7 @@ const GAMES = {
 };
 
 export function illustration(key, className = '') {
-  return `<img class="arcade-art ${className}" src="/assets/arcade/${key}.webp" alt="" width="320" height="240" decoding="async" />`;
+  return `<img class="arcade-art ${className}" src="/assets/arcade/${key}.png" alt="" width="320" height="240" decoding="async" />`;
 }
 
 export function gameHero(key, { subtitle = '', dynamic = false } = {}) {

@@ -1,3 +1,43 @@
+/* Cafe24 PRO Slim: supplied WOFF2 files, Hangul only.
+   Air: secondary copy; Fit: body/actions; Max: headings/emphasis.
+   Static faces cover existing UI weights without synthetic bold. Latin,
+   numbers, punctuation and symbols continue using the original fonts below. */
+@font-face {
+  font-family: 'Cafe24 PRO Slim KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 399;
+  src: url('../assets/fonts/Cafe24PROSlimAir.woff2') format('woff2');
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+
+@font-face {
+  font-family: 'Cafe24 PRO Slim KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 799;
+  src: url('../assets/fonts/Cafe24PROSlimFit.woff2') format('woff2');
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+
+@font-face {
+  font-family: 'Cafe24 PRO Slim KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 800 900;
+  src: url('../assets/fonts/Cafe24PROSlimMax.woff2') format('woff2');
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+
+@font-face {
+  font-family: 'Cafe24 PRO Slim Air KR';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../assets/fonts/Cafe24PROSlimAir.woff2') format('woff2');
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7AF, U+D7B0-D7FF;
+}
+
 /* noto-sans-kr-[0]-wght-normal */
 @font-face {
   font-family: 'Noto Sans KR Variable';
