@@ -4,7 +4,7 @@ export const PARTY_GAMES = {
   catchmind: { key: 'catchmind', label: '독심술사', icon: '🔮' },
   numberluck: { key: 'numberluck', label: '숫자 고르기', icon: '🃏' },
 };
-export const REVEAL_DELAY = 180_000;
+export const REVEAL_DELAY = 30_000;
 export function partyKey(value) { return Object.hasOwn(PARTY_GAMES, value ?? '') ? value : null; }
 
 export async function activeRound(db, game) {

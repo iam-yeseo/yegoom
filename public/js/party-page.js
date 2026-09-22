@@ -72,7 +72,7 @@ function tick() {
   if (!el || !state?.round) return;
   const r=state.round;
   if (r.state==='guessing') { el.textContent='준비 완료한 참가자 모두 확정하면 정답과 점수가 공개돼요.'; return; }
-  if (!r.deadline) { el.textContent='3명 이상 준비 완료하면 3분 뒤 공개해요. 2명만 준비하면 한 명을 더 기다려요.'; return; }
+  if (!r.deadline) { el.textContent='3명 이상 준비 완료하면 30초 뒤 공개해요. 2명만 준비하면 한 명을 더 기다려요.'; return; }
   const sec=Math.max(0,Math.ceil((r.deadline-Date.now()-offset)/1000));
   el.textContent=sec ? `공개까지 ${Math.floor(sec/60)}분 ${sec%60}초 · 공개 전까지 참여할 수 있어요` : '답변을 공개하고 있어요…';
   if (!sec) load().catch(()=>{});
