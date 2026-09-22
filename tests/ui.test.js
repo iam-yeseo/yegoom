@@ -81,6 +81,28 @@ test('mind: own answer is unavailable; confirmed guesses hide controls',async t=
   assert.equal(app.doc.querySelectorAll('#party-play input').length,0);
   assert.match(app.doc.querySelector('#party-play').textContent,/봉인 완료/);
 });
+for(const scenario of [
+  {name:'four-player perfect round stacks both bonuses',count:4,correctCount:3,score:10,personal:'+2점',group:'+5점'},
+  {name:'three-player perfect round awards only the group bonus',count:3,correctCount:2,score:7,personal:'없음',group:'+5점'},
+  {name:'historical perfect round does not invent a group bonus',count:4,correctCount:3,score:5,personal:'+2점',group:'없음'},
+]) {
+  test(`mind results: ${scenario.name}`,async t=>{
+    const players=Array.from({length:scenario.count},(_,i)=>({
+      id:i+1,displayName:i?'친구'+i:player.displayName,role:'player',ready:true,confirmed:true,
+      answer:'답변'+i,correctCount:scenario.correctCount,score:scenario.score,
+    }));
+    const state=partyState({round:{id:12,roundNo:3,state:'closed'},mine:{ready:true,confirmed:true},players});
+    const {doc}=await mount(t,'catchmind',state);
+    const result=doc.querySelector('.arcade-result');
+    const details=Object.fromEntries([...result.querySelectorAll('dl > div')].map(row=>[
+      row.querySelector('dt').textContent,row.querySelector('dd').textContent,
+    ]));
+    assert.equal(result.querySelector('.arcade-result__hero strong').textContent,`+${scenario.score}점`);
+    assert.deepEqual(details,{'맞힌 사람':`${scenario.correctCount}명`,'개인 보너스':scenario.personal,'전원 정답 보너스':scenario.group});
+    assert.deepEqual([...doc.querySelectorAll('.party-result p > b')].map(el=>el.textContent),Array(scenario.count).fill(`+${scenario.score}점`));
+    assert.match(doc.querySelector('#party-rules').textContent,/준비 완료한 참가자 전원이 본인 답변을 제외한 모든 작성자를 맞히면 전원에게 보너스 5점/);
+  });
+}
 test('quiz: unopened hints stay private and three envelope states render',async t=>{
   const state={game:quizInfo(),roundNo:3,nextRoundNo:4,turn:friend,isTurnHolder:false,canSet:false,players:[],me:{isPlayer:true,isSetter:false,solved:false,canHint:true,hints:[],hintsUsed:0,wrongs:0,attempts:[],nextHintPenalty:1},quiz:{id:3,roundNo:3,status:'open',closed:false,question:'고양이는 귀엽다?',setter:friend,answerType:'ox',answerTypeLabel:'O/X',answerTypeNote:'O 또는 X',mode:'free',modeLabel:'자유',modeIcon:'',modeNote:'',secondsLeft:null,hintCount:2,solvedCount:0}};
   const {doc}=await mount(t,'quiz',state);

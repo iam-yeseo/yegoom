@@ -39,6 +39,9 @@ export async function advanceParty(db, game, now = Date.now()) {
         WHERE round_id=? AND ready=1 AND EXISTS(SELECT 1 FROM party_rounds r WHERE r.id=p.round_id AND r.state='guessing')
         AND NOT EXISTS(SELECT 1 FROM party_players x WHERE x.round_id=p.round_id AND x.ready=1 AND x.confirmed=0)`).bind(id),
       db.prepare(`UPDATE party_players AS p SET score=correct_count+CASE WHEN correct_count>=3 THEN 2 ELSE 0 END
+        +CASE WHEN NOT EXISTS(SELECT 1 FROM party_players x WHERE x.round_id=p.round_id AND x.ready=1
+          AND x.correct_count<>(SELECT COUNT(*)-1 FROM party_players y WHERE y.round_id=p.round_id AND y.ready=1))
+          THEN 5 ELSE 0 END
         WHERE round_id=? AND ready=1 AND EXISTS(SELECT 1 FROM party_rounds r WHERE r.id=p.round_id AND r.state='guessing')
         AND NOT EXISTS(SELECT 1 FROM party_players x WHERE x.round_id=p.round_id AND x.ready=1 AND x.confirmed=0)`).bind(id),
       db.prepare(`UPDATE party_rounds SET state='closed',closed_at=? WHERE id=? AND state='guessing'

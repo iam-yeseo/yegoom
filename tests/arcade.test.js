@@ -82,7 +82,7 @@ test('D1: migration, anonymous rounds, concurrency, scoring, history and authori
   assert.equal((await state('catchmind')).round.state,'guessing');
   await Promise.all([action(4,'catchmind','confirm',id,{guesses:choices(4)}),action(4,'catchmind','confirm',id,{guesses:choices(4)})]);
   s=await state('catchmind');assert.equal(s.round.state,'closed');
-  assert.ok(s.players.every(p=>p.correctCount===3&&p.score===5));
+  assert.ok(s.players.every(p=>p.correctCount===3&&p.score===10));
   await Promise.all([advanceParty(db,'catchmind'),advanceParty(db,'catchmind')]);
   const hist=await (await party.history(ctx(1,'/api/party/history?game=catchmind'))).json();
   assert.equal(hist.history[0].question,'가장 기억에 남는 여행지는?');
@@ -110,9 +110,9 @@ test('D1: migration, anonymous rounds, concurrency, scoring, history and authori
   assert.deepEqual(s.players.map(p=>p.score),[0,0,5,3]);
   assert.deepEqual(s.players.map(p=>p.place),[null,null,1,2]);
   const total=await call(ranking,1,'/api/ranking');
-  assert.equal(total.ranking.find(p=>p.id===1).score,8);
-  assert.equal(total.ranking.find(p=>p.id===3).score,10);
-  assert.equal((await call(me,3,'/api/me')).user.score,10);
+  assert.equal(total.ranking.find(p=>p.id===1).score,13);
+  assert.equal(total.ranking.find(p=>p.id===3).score,15);
+  assert.equal((await call(me,3,'/api/me')).user.score,15);
   assert.equal((await call(ranking,1,'/api/ranking?game=numberluck')).ranking[0].id,3);
   // All duplicate: everyone scores zero, and no phantom winner.
   await Promise.all([1,2,3].map(u=>action(u,'numberluck','join')));
@@ -151,4 +151,46 @@ test('D1: migration, anonymous rounds, concurrency, scoring, history and authori
   const cap=await Promise.all([call(questions,5,'/api/admin/questions',{question:'마지막 A'}),call(questions,5,'/api/admin/questions',{question:'마지막 B'})]);
   assert.deepEqual(cap.map(r=>r.status).sort(),[200,409]);
   assert.equal((await call(questions,5,'/api/admin/questions')).questions.length,100);
+
+  // Team bonus excludes unready spectators and requires every guess from every ready player.
+  for(const scenario of [
+    {participants:[1,2,3],wrongPlayer:null,counts:[2,2,2],scores:[7,7,7]},
+    {participants:[1,2,3,4],wrongPlayer:1,counts:[2,3,3,3],scores:[2,5,5,5]},
+  ]) {
+    await Promise.all([1,2,3,4].map(u=>action(u,'catchmind','join')));
+    s=await state('catchmind');id=s.round.id;
+    for(const u of scenario.participants) {
+      await action(u,'catchmind','answer',id,{answer:`보너스 답변 ${u}`});
+      await action(u,'catchmind','ready',id);
+    }
+    await db.prepare(`UPDATE party_rounds SET deadline=? WHERE id=?`).bind(Date.now()-1,id).run();
+    s=await state('catchmind');assert.equal(s.round.state,'guessing');
+    const {results: participants}=await db.prepare(`SELECT * FROM party_players WHERE round_id=? AND ready=1 ORDER BY user_id`).bind(id).all();
+    for(const u of scenario.participants) {
+      const guesses=participants.filter(p=>p.user_id!==u).map(p=>({answerId:p.answer_id,authorId:p.user_id}));
+      if(u===scenario.wrongPlayer) guesses[0].authorId=guesses[1].authorId;
+      if(u===scenario.participants.at(-1)) {
+        assert.equal((await state('catchmind')).round.state,'guessing');
+        assert.equal((await db.prepare(`SELECT SUM(score) AS score FROM party_players WHERE round_id=?`).bind(id).first()).score,0);
+      }
+      assert.equal((await action(u,'catchmind','confirm',id,{guesses})).status,200);
+    }
+    s=await state('catchmind');assert.equal(s.round.state,'closed');
+    assert.deepEqual(s.players.filter(p=>p.ready).map(p=>p.correctCount),scenario.counts);
+    assert.deepEqual(s.players.filter(p=>p.ready).map(p=>p.score),scenario.scores);
+    const {results: spectators}=await db.prepare(`SELECT score FROM party_players WHERE round_id=? AND ready=0`).bind(id).all();
+    assert.ok(spectators.every(p=>p.score===0));
+    await Promise.all([advanceParty(db,'catchmind'),advanceParty(db,'catchmind')]);
+    assert.deepEqual((await state('catchmind')).players.filter(p=>p.ready).map(p=>p.score),scenario.scores);
+  }
+
+  // A completed round from the previous scoring rule is never awarded a retroactive bonus.
+  await db.prepare(`INSERT INTO party_rounds(id,game,round_no,state,created_at,closed_at)
+    VALUES('legacy-catchmind','catchmind',100,'closed',1,2)`).run();
+  for(const u of [1,2,3]) {
+    await db.prepare(`INSERT INTO party_players(round_id,user_id,answer_id,ready,confirmed,correct_count,score)
+      VALUES('legacy-catchmind',?,?,1,1,2,2)`).bind(u,`legacy-answer-${u}`).run();
+  }
+  s=await state('catchmind');
+  assert.deepEqual(s.players.map(p=>p.score),[2,2,2]);
 });

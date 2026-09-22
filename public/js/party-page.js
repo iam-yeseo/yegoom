@@ -12,7 +12,7 @@ const history=document.getElementById('party-history');
 const roster=document.createElement('section');
 roster.className='card';roster.id='party-roster';play.after(roster);
 document.getElementById('party-rules').textContent=catchmind
-  ? '작성 완료와 준비 완료는 별도예요. 공개된 답변마다 작성자를 한 명씩 골라 확정하세요. 본인 답변은 맞힐 수 없어요. 맞힌 사람당 1점, 3명 이상 맞히면 보너스 2점!'
+  ? '작성 완료와 준비 완료는 별도예요. 공개된 답변마다 작성자를 한 명씩 골라 확정하세요. 본인 답변은 맞힐 수 없어요. 맞힌 사람당 1점, 3명 이상 맞히면 개인 보너스 2점! 준비 완료한 참가자 전원이 본인 답변을 제외한 모든 작성자를 맞히면 전원에게 보너스 5점을 추가해요.'
   : '숫자 선택을 확정하고 준비 완료를 눌러 주세요. 중복 숫자는 탈락! 나머지는 큰 숫자부터 1등 5점 · 2등 3점 · 3등 2점 · 4등 1점을 받아요.';
 let state, viewKey='', historyKey='', busy=false, loading=false, offset=0;
 let answerDraft='',numberDraft=null,guesses={};
@@ -47,7 +47,10 @@ function render() {
   if (!round) return;
   if (round.state==='closed') {
     const me=players.find(p=>p.id===user.id&&p.ready);
-    setHtml(play,`${me?scoreCard(me.score,catchmind?[["맞힌 사람",me.correctCount+"명"],["보너스",me.correctCount>=3?"+2점":"없음"]]:[["내 숫자",me.number],["결과",me.place?me.place+"등 · 생존":"중복 탈락"]],{loss:!catchmind&&!me.place}):''}<h2 class="card__label">전체 결과</h2>${players.filter(p=>p.ready).map(p=>`<div class="party-result">
+    const personalBonus=me?.correctCount>=3?2:0;
+    // 저장된 점수로 판별해 규칙 변경 전에 채점한 회차에는 새 보너스를 표시하지 않는다.
+    const allCorrectBonus=me && me.score-me.correctCount-personalBonus===5;
+    setHtml(play,`${me?scoreCard(me.score,catchmind?[["맞힌 사람",me.correctCount+"명"],["개인 보너스",personalBonus?"+2점":"없음"],["전원 정답 보너스",allCorrectBonus?"+5점":"없음"]]:[["내 숫자",me.number],["결과",me.place?me.place+"등 · 생존":"중복 탈락"]],{loss:!catchmind&&!me.place}):''}<h2 class="card__label">전체 결과</h2>${players.filter(p=>p.ready).map(p=>`<div class="party-result">
       ${catchmind?'':`<span class="number-card ${p.place?'number-card--survivor':'number-card--duplicate'}">${p.number}</span>`}<div>${personChip(p)}
       <p>${catchmind ? `${escapeHtml(p.answer)} · 맞힌 사람 ${p.correctCount}명` : p.place ? `${p.place}등` : '중복 탈락'} · <b>+${p.score}점</b></p></div></div>`).join('')}`);
   } else if (round.state==='answering' && mine) {
