@@ -1,5 +1,5 @@
 // 역할에 맞는 화면만 로드한다. 운영자는 게임 입력/참여 화면을 만들지 않는다.
-import { requireLogin, showMessage } from './common.js';
+import { requireLogin, showLoadError } from './common.js';
 
 try {
   const user = await requireLogin();
@@ -15,7 +15,5 @@ try {
     await import('./party-page.js');
   }
 } catch (err) {
-  const message = document.createElement('p');
-  document.querySelector('.app').prepend(message);
-  showMessage(message, `화면을 불러오지 못했습니다: ${err.message}`);
+  showLoadError(err);
 }

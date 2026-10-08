@@ -33,7 +33,7 @@ import * as reveal from './routes/reveal.js';
 import * as setup from './routes/setup.js';
 import * as today from './routes/today.js';
 import { migrate as runMigration, pendingMigrations } from './lib/migrate.js';
-import { json } from './lib/util.js';
+import { fail, json } from './lib/util.js';
 
 const ROUTES = new Map([
   ['/api/party', party],
@@ -75,19 +75,22 @@ const ROUTES = new Map([
  * 확인은 워커 인스턴스마다 딱 한 번이라 평소에는 비용이 없고, 여러 요청이
  * 동시에 들어와도 마이그레이션은 하나만 돈다. 옮길 게 없으면 아무 일도 없다.
  */
-let schemaReady = null;
+const schemaChecks = new WeakMap();
 
 function ensureSchema(env) {
-  schemaReady ??= (async () => {
+  let schemaReady = schemaChecks.get(env.DB);
+  if (schemaReady) return schemaReady;
+  schemaReady = (async () => {
     const pending = await pendingMigrations(env.DB);
     if (!pending.length) return;
     console.log(`예전 스키마를 옮깁니다: ${pending.join(', ')}`);
     await runMigration(env.DB);
   })().catch((err) => {
     // 실패하면 다음 요청에서 다시 시도한다 (여기서 요청을 막지는 않는다)
-    schemaReady = null;
+    schemaChecks.delete(env.DB);
     console.error('스키마 자동 업데이트 실패', err);
   });
+  schemaChecks.set(env.DB, schemaReady);
   return schemaReady;
 }
 
@@ -119,6 +122,17 @@ export default {
         { ok: false, error: '허용되지 않은 메서드입니다.' },
         { status: 405, headers: { allow: [...new Set(allowed)].join(', ') } },
       );
+    }
+
+    // SameSite cookies do not prevent login CSRF or requests from sibling origins.
+    // CLI clients have no browser Origin/Fetch Metadata and retain token authentication.
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+      const origin = request.headers.get('origin');
+      const site = request.headers.get('sec-fetch-site');
+      if ((origin !== null && origin !== new URL(request.url).origin) ||
+          (site !== null && site !== 'same-origin' && site !== 'none')) {
+        return fail(403, '같은 사이트에서만 요청할 수 있습니다.');
+      }
     }
 
     try {

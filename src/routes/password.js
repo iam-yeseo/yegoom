@@ -19,11 +19,15 @@ export async function onRequestPost(context) {
   }
 
   const { hash, salt } = await hashPassword(newPassword);
-  await db.batch([
-    db.prepare(`UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?`)
-      .bind(hash, salt, user.id),
-    db.prepare(`DELETE FROM sessions WHERE user_id = ?`).bind(user.id),
+  const results = await db.batch([
+    db.prepare(`UPDATE users SET password_hash = ?, password_salt = ?
+                 WHERE id = ? AND password_hash = ? AND password_salt = ?`)
+      .bind(hash, salt, user.id, row.password_hash, row.password_salt),
+    db.prepare(`DELETE FROM sessions WHERE user_id = ? AND EXISTS
+      (SELECT 1 FROM users WHERE id = ? AND password_hash = ? AND password_salt = ?)`)
+      .bind(user.id, user.id, hash, salt),
   ]);
+  if (!results[0].meta.changes) return fail(401, '비밀번호가 변경되었습니다. 다시 로그인해 주세요.');
 
   return json({ ok: true, message: '비밀번호를 변경했습니다. 다시 로그인해 주세요.' });
 }

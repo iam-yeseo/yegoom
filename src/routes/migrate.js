@@ -8,10 +8,7 @@ import { migrate } from '../lib/migrate.js';
  */
 export async function onRequestPost(context) {
   const expected = context.env.SETUP_TOKEN;
-  const provided =
-    context.request.headers.get('x-setup-token') ??
-    new URL(context.request.url).searchParams.get('token') ??
-    '';
+  const provided = context.request.headers.get('x-setup-token') ?? '';
 
   const byToken = !!expected && timingSafeEqual(provided, expected);
   if (!byToken) {

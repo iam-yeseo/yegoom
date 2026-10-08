@@ -1,4 +1,4 @@
-import { fail, json, timingSafeEqual } from '../lib/util.js';
+import { fail, hashPassword, json, randomHex, timingSafeEqual } from '../lib/util.js';
 import { migrate, pendingMigrations } from '../lib/migrate.js';
 import { SEED_USERS } from '../lib/seed.js';
 import { gameKeyOf } from '../lib/games.js';
@@ -11,7 +11,7 @@ import { assignSetterStatements } from '../lib/setter.js';
  * wrangler CLI 없이 브라우저에서 끝낼 수 있게 만든 엔드포인트라, 아무나 못 쓰도록
  * 두 겹으로 막는다.
  *   1) 계정이 이미 하나라도 있으면 거부한다 (한 번 쓰이면 스스로 닫힌다)
- *   2) SETUP_TOKEN 시크릿이 설정돼 있으면 그 토큰까지 맞아야 한다
+ *   2) SETUP_TOKEN 시크릿과 요청 헤더의 토큰이 반드시 일치해야 한다
  *
  * 테이블 생성은 전부 IF NOT EXISTS 라 기존 데이터를 절대 지우지 않는다.
  */
@@ -32,16 +32,11 @@ export async function onRequestGet(context) {
 export async function onRequestPost(context) {
   const db = context.env.DB;
 
-  // SETUP_TOKEN 을 설정해 뒀다면 반드시 일치해야 한다
   const expected = context.env.SETUP_TOKEN;
-  if (expected) {
-    const provided =
-      context.request.headers.get('x-setup-token') ??
-      new URL(context.request.url).searchParams.get('token') ??
-      '';
-    if (!timingSafeEqual(provided, expected)) {
-      return fail(401, '설정 토큰이 올바르지 않습니다.');
-    }
+  if (!expected) return fail(503, 'SETUP_TOKEN 이 설정되지 않았습니다.');
+  const provided = context.request.headers.get('x-setup-token') ?? '';
+  if (!timingSafeEqual(provided, expected)) {
+    return fail(401, '설정 토큰이 올바르지 않습니다.');
   }
 
   const before = await readStatus(db);
@@ -54,9 +49,16 @@ export async function onRequestPost(context) {
   // 1. 테이블 (이미 있으면 그대로 두고, 예전 스키마면 새 모양으로 옮긴다)
   await migrate(db);
 
-  // 2. 계정
-  await db.batch(
-    SEED_USERS.map((u) =>
+  // 2. Generate fresh credentials, never reusable passwords from a public seed.
+  const initialPasswords = [];
+  const users = [];
+  for (const u of SEED_USERS) {
+    const password = randomHex(16);
+    users.push({ ...u, ...await hashPassword(password) });
+    initialPasswords.push({ username: u.username, password });
+  }
+  const inserted = await db.batch(
+    users.map((u) =>
       db
         .prepare(
           `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)
@@ -66,6 +68,8 @@ export async function onRequestPost(context) {
         .bind(u.username, u.displayName, u.avatar, u.role, u.hash, u.salt),
     ),
   );
+  const createdPasswords = initialPasswords.filter((_, i) => inserted[i].meta.changes > 0);
+  if (!createdPasswords.length) return fail(409, '이미 초기 설정이 끝났습니다.');
 
   // 3. 게임별 출제자 — 시드의 setter 값('morning' / 'evening')대로 지정한다
   const statements = [];
@@ -78,7 +82,7 @@ export async function onRequestPost(context) {
   if (statements.length) await db.batch(statements);
 
   const after = await readStatus(db);
-  return json({ ok: true, created: true, ...after });
+  return json({ ok: true, created: true, ...after, initialPasswords: createdPasswords });
 }
 
 /** users 테이블이 아직 없을 수도 있으므로 조회 실패를 "설정 전"으로 본다. */

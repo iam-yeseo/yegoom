@@ -2,27 +2,79 @@
 
 /* ---------------- API ---------------- */
 
-export async function api(path, { method = 'GET', body } = {}) {
-  const res = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
+const pendingReads = new Map();
+let loginRequest;
+
+export function api(path, { method = 'GET', body, headers, timeout = 15000 } = {}) {
+  method = method.toUpperCase();
+  const read = method === 'GET' && !headers;
+  if (read && pendingReads.has(path)) return pendingReads.get(path);
+  if (method !== 'GET' && method !== 'HEAD') {
+    pendingReads.clear();
+    loginRequest = undefined;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  const request = Promise.resolve().then(async () => {
+    try {
+      const res = await fetch(path, {
+        method, credentials: 'same-origin', signal: controller.signal,
+        headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => null);
+      if (controller.signal.aborted) throw new Error('timeout');
+      if (!res.ok) {
+        const err = new Error(data?.error || `요청에 실패했습니다. (${res.status})`);
+        err.status = res.status;
+        throw err;
+      }
+      if (!data || typeof data !== 'object') throw new Error('서버 응답을 읽지 못했습니다. 다시 시도해 주세요.');
+      return data;
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error('서버 응답이 늦어지고 있어요. 연결을 확인하고 다시 시도해 주세요.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+      if (pendingReads.get(path) === request) pendingReads.delete(path);
+      if (method !== 'GET' && method !== 'HEAD') pendingReads.clear();
+    }
   });
+  if (read) pendingReads.set(path, request);
+  return request;
+}
 
-  let data = {};
+/** Validate and navigate using the same canonical URL (including backslash normalization). */
+export function safeNextUrl(next, base = location.href) {
+  const home = new URL('/', base);
   try {
-    data = await res.json();
+    const target = new URL(next || '/', home);
+    return target.origin === home.origin && !target.username && !target.password ? target.href : home.href;
   } catch {
-    /* 본문이 없거나 JSON 이 아닐 수 있다 */
+    return home.href;
   }
+}
 
-  if (!res.ok) {
-    const err = new Error(data.error || `요청에 실패했습니다. (${res.status})`);
-    err.status = res.status;
-    throw err;
+export function showLoadError(err) {
+  let panel = document.querySelector('[data-load-error]');
+  if (!panel) {
+    panel = document.createElement('section');
+    panel.dataset.loadError = '';
+    panel.className = 'card';
+    panel.setAttribute('role', 'alert');
+    (document.querySelector('main') || document.body).prepend(panel);
   }
-  return data;
+  const message = document.createElement('p');
+  message.textContent = `화면을 불러오지 못했습니다: ${err.message}`;
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'btn';
+  retry.textContent = '다시 시도';
+  retry.addEventListener('click', () => location.reload());
+  panel.replaceChildren(message, retry);
 }
 
 /* ---------------- 앱 이름 ---------------- */
@@ -164,10 +216,15 @@ export function renderTabbar(user) {
 export async function requireLogin({ adminOnly = false } = {}) {
   let me;
   try {
-    me = await api('/api/me');
-  } catch {
-    location.replace('/login');
-    await new Promise(() => {});
+    loginRequest ??= api('/api/me');
+    me = await loginRequest;
+  } catch (err) {
+    loginRequest = undefined;
+    if (err.status === 401) me = { user: null };
+    else {
+      showLoadError(err);
+      throw err;
+    }
   }
 
   if (!me.user) {

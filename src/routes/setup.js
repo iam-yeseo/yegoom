@@ -52,7 +52,7 @@ export async function onRequestPost(context) {
     }
 
     const { hash, salt } = await hashPassword(password);
-    await context.env.DB.prepare(
+    await context.env.DB.batch([context.env.DB.prepare(
       `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(username) DO UPDATE
@@ -62,8 +62,10 @@ export async function onRequestPost(context) {
              password_hash = excluded.password_hash,
              password_salt = excluded.password_salt`,
     )
-      .bind(username, displayName, avatar, role, hash, salt)
-      .run();
+      .bind(username, displayName, avatar, role, hash, salt),
+      context.env.DB.prepare(`DELETE FROM sessions WHERE user_id = (SELECT id FROM users WHERE username = ?)`)
+        .bind(username),
+    ]);
 
     created.push({ username, displayName, avatar, role, setter: setterGame });
   }

@@ -7,6 +7,7 @@
   <meta name="robots" content="noindex" />
   <title>초기 설정 · 예굼방 아케이드 🎮</title>
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/fonts.css" />
   <link rel="stylesheet" href="/css/arcade.css" />
   <link rel="icon" type="image/svg+xml" href="/assets/arcade/icon-cat.svg" />
 </head>
@@ -17,6 +18,16 @@
     <p class="auth__sub">테이블과 계정을 준비하고, 게임별 출제자를 지정하는 운영자 페이지입니다.</p>
 
     <p id="msg" class="msg hidden" role="status"></p>
+
+    <label class="field">
+      <span>설정 토큰 (초기 설정 시 필수)</span>
+      <input id="setup-token" type="password" autocomplete="off" />
+    </label>
+    <section id="initial-passwords" class="card hidden">
+      <h2>초기 비밀번호</h2>
+      <p>이번 화면에서만 확인할 수 있어요. 안전한 곳에 보관하고 각 사용자에게 전달해 주세요.</p>
+      <textarea id="credentials" readonly rows="6" aria-label="계정별 초기 비밀번호"></textarea>
+    </section>
 
     <section class="card">
       <div class="card__label">상태</div>
@@ -86,8 +97,11 @@
       chanceList: document.getElementById('chance-list'),
     };
 
-    // SETUP_TOKEN 을 걸어 뒀다면 /setup?token=... 으로 들어온다
-    const token = new URLSearchParams(location.search).get('token');
+    // Keep secrets out of URLs, browser history and referrers.
+    function tokenHeaders() {
+      const token = document.getElementById('setup-token').value.trim();
+      return token ? { 'x-setup-token': token } : {};
+    }
 
     /** 이 사람이 맡고 있는 게임 — "🌅 오전 출제자" 처럼 적는다 */
     function setterText(user) {
@@ -250,11 +264,9 @@
       // 남은 게 있으면 눈에 띄게 알려 준다.
       const pending = s.pendingMigration ?? [];
       if (pending.length) {
-        const needsAdmin = pending.includes('users.admin-account');
         showMessage(
           el.migrateState,
-          `업데이트가 필요합니다 (${pending.join(', ')}).` +
-            (needsAdmin ? ' 실행하면 운영자 계정 admin 이 만들어집니다.' : ''),
+          `업데이트가 필요합니다 (${pending.join(', ')}).`,
           'error',
         );
         el.migrate.classList.remove('btn--ghost');
@@ -285,8 +297,10 @@
       el.run.textContent = '설정 중…';
       showMessage(el.msg, '');
       try {
-        const path = token ? `/api/bootstrap?token=${encodeURIComponent(token)}` : '/api/bootstrap';
-        const res = await api(path, { method: 'POST' });
+        const res = await api('/api/bootstrap', { method: 'POST', headers: tokenHeaders() });
+        document.getElementById('credentials').value = res.initialPasswords
+          .map(u => `${u.username}: ${u.password}`).join('\n');
+        document.getElementById('initial-passwords').classList.remove('hidden');
         showMessage(el.msg, `계정 ${res.userCount}개를 만들었습니다.`, 'ok');
         await refresh();
         await refreshSetter().catch(() => {});
@@ -304,15 +318,11 @@
       el.migrate.textContent = '업데이트 중…';
       showMessage(el.msg, '');
       try {
-        const path = token ? `/api/migrate?token=${encodeURIComponent(token)}` : '/api/migrate';
-        const res = await api(path, { method: 'POST' });
+        const res = await api('/api/migrate', { method: 'POST', headers: tokenHeaders() });
         showMessage(
           el.msg,
           res.migrated
-            ? `옮긴 항목: ${res.applied.join(', ')}.` +
-                (res.applied.includes('users.admin-account')
-                  ? ' 이제 admin / admin 으로 로그인하세요.'
-                  : '')
+            ? `옮긴 항목: ${res.applied.join(', ')}.`
             : '이미 최신 스키마입니다.',
           'ok',
         );

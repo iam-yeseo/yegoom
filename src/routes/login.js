@@ -27,14 +27,17 @@ export async function onRequestPost(context) {
   }
 
   const token = randomHex(32);
-  await context.env.DB.batch([
+  const results = await context.env.DB.batch([
     // 만료된 세션 정리
     context.env.DB.prepare(`DELETE FROM sessions WHERE expires_at <= datetime('now')`),
     context.env.DB.prepare(
       `INSERT INTO sessions (token, user_id, expires_at)
-       VALUES (?, ?, datetime('now', ?))`,
-    ).bind(token, user.id, `+${SESSION_DAYS} days`),
+       SELECT ?, id, datetime('now', ?) FROM users
+        WHERE id = ? AND password_hash = ? AND password_salt = ?`,
+    ).bind(token, `+${SESSION_DAYS} days`, user.id, user.password_hash, user.password_salt),
   ]);
+  // A reset may finish while PBKDF2 is running. Never mint a session for stale credentials.
+  if (!results[1].meta.changes) return fail(401, '아이디 또는 비밀번호가 올바르지 않습니다.');
 
   return json(
     {

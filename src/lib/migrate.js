@@ -12,7 +12,6 @@
 //   게임 분리     : rounds/guesses/results 에 game 컬럼 추가 (기존 기록은 오후 게임으로)
 //   game_setters : 게임별 출제자 표 추가 (기존 출제자는 오후, 오전은 min)
 //   기회          : rounds 에 chances_total/chances_used 추가 + round_chances / game_config 표
-//   계정          : 운영자 전용 admin 계정을 만들고, 기존 운영자는 출제자/플레이어로 옮긴다
 //   퀴즈          : quiz_turn / quiz_rounds / quiz_photos / quiz_players / quiz_attempts 표 추가
 //                  (표만 새로 만들면 되므로 0단계에서 함께 처리된다)
 //   퀴즈 진행 방식 : quiz_rounds 에 mode / time_limit_sec / deadline_at / closed_reason 추가
@@ -21,7 +20,6 @@
 
 import { GAMES } from './games.js';
 import { SCHEMA_STATEMENTS } from './schema.js';
-import { SEED_USERS } from './seed.js';
 import { assignSetterStatements } from './setter.js';
 
 async function columnsOf(db, table) {
@@ -55,20 +53,32 @@ export function renumberRoundsStatements(db) {
 export async function pendingMigrations(db) {
   const pending = [];
 
-  const users = await columnsOf(db, 'users');
+  // D1 batch performs one round trip, instead of awaiting every table in sequence.
+  // Do not swallow database failures: a failed check must be retried next request.
+  const tables = ['users', 'rounds', 'guesses', 'results', 'game_setters',
+    'round_chances', 'game_config', 'quiz_turn', 'quiz_rounds', 'quiz_photos',
+    'quiz_players', 'quiz_attempts', 'catchmind_questions', 'party_rounds',
+    'party_lobby', 'party_players', 'party_guesses'];
+  const metadata = await db.batch([
+    ...tables.map(table => db.prepare(`PRAGMA table_info(${table})`)),
+    db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='quiz_rounds'`),
+  ]);
+  const columns = Object.fromEntries(tables.map((table, i) =>
+    [table, (metadata[i].results ?? []).map(c => c.name)]));
+  const users = columns.users;
   if (!users.length) return pending;
 
   if (!users.includes('avatar')) pending.push('users.avatar');
   if (!users.includes('photo_version')) pending.push('users.photo_version');
 
-  const rounds = await columnsOf(db, 'rounds');
+  const rounds = columns.rounds;
   if (rounds.includes('answer_minutes')) pending.push('rounds.answer_seconds');
   else if (rounds.length && !rounds.includes('setter_user_id')) pending.push('rounds.setter_user_id');
 
-  const guesses = await columnsOf(db, 'guesses');
+  const guesses = columns.guesses;
   if (guesses.includes('guess_minutes')) pending.push('guesses.guess_seconds');
 
-  const results = await columnsOf(db, 'results');
+  const results = columns.results;
   if (results.includes('diff') && !results.includes('diff_seconds')) {
     pending.push('results.diff_seconds');
   }
@@ -77,40 +87,33 @@ export async function pendingMigrations(db) {
   if (rounds.length && !rounds.includes('game')) pending.push('rounds.game');
   if (guesses.length && !guesses.includes('game')) pending.push('guesses.game');
   if (results.length && !results.includes('game')) pending.push('results.game');
-  if (!(await columnsOf(db, 'game_setters')).length) pending.push('game_setters');
+  if (!(columns.game_setters).length) pending.push('game_setters');
 
   // 오후 게임의 '기회'
   if (rounds.length && !rounds.includes('chances_used')) pending.push('rounds.chances');
-  if (!(await columnsOf(db, 'round_chances')).length) pending.push('round_chances');
-  if (!(await columnsOf(db, 'game_config')).length) pending.push('game_config');
+  if (!(columns.round_chances).length) pending.push('round_chances');
+  if (!(columns.game_config).length) pending.push('game_config');
 
   // 예굼퀴즈대회 — 표가 통째로 새로 생긴다 (0단계에서 만들어진다)
   for (const table of ['quiz_turn', 'quiz_rounds', 'quiz_photos', 'quiz_players', 'quiz_attempts']) {
-    if (!(await columnsOf(db, table)).length) {
+    if (!(columns[table]).length) {
       pending.push('quiz');
       break;
     }
   }
 
   // 퀴즈 진행 방식 (자유 · 선착순 · 제한시간) — quiz_rounds 에 컬럼 넷이 붙는다
-  const quizCols = await columnsOf(db, 'quiz_rounds');
+  const quizCols = columns.quiz_rounds;
   if (quizCols.length && !quizCols.includes('mode')) pending.push('quiz_rounds.mode');
 
   // 정답 양식 (날짜 · 시간 · 금액) — answer_type 의 CHECK 를 넓혀야 한다
-  if (quizCols.length && !(await allowsAnswerForms(db))) pending.push('quiz_rounds.answer_type');
-
-  for (const table of ['catchmind_questions', 'party_rounds', 'party_lobby', 'party_players', 'party_guesses']) {
-    if (!(await columnsOf(db, table)).length) pending.push(table);
+  const quizSql = metadata.at(-1).results?.[0]?.sql;
+  if (quizCols.length && quizSql && /answer_type[^,]*CHECK/i.test(quizSql) && !quizSql.includes("'date'")) {
+    pending.push('quiz_rounds.answer_type');
   }
 
-  // 운영자 전용 계정이 아직 없으면 계정 정리도 남아 있는 것이다
-  const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
-  if (seedAdmin) {
-    const admin = await db
-      .prepare(`SELECT id FROM users WHERE username = ?`)
-      .bind(seedAdmin.username)
-      .first();
-    if (!admin) pending.push('users.admin-account');
+  for (const table of ['catchmind_questions', 'party_rounds', 'party_lobby', 'party_players', 'party_guesses']) {
+    if (!(columns[table]).length) pending.push(table);
   }
 
   return pending;
@@ -269,8 +272,7 @@ export async function migrate(db) {
   // 6-3. 정답 양식 — answer_type 이 받는 값의 목록을 넓힌다
   applied.push(...(await migrateAnswerTypes(db)));
 
-  // 7. 계정 — 운영자를 admin 계정 하나로 분리한다
-  applied.push(...(await migrateAccounts(db)));
+  // Account creation and role changes require explicit authenticated setup.
 
   return { applied, migrated: applied.length > 0 };
 }
@@ -501,52 +503,4 @@ async function migrateAnswerTypes(db) {
   ]);
 
   return ['quiz_rounds.answer_type'];
-}
-
-/**
- * 예전에는 운영자가 곧 출제자였다(퇴근하는 사람이 정답도 등록했다).
- * 이제는 운영자 전용 admin 계정을 따로 두므로, 그 계정이 아직 없으면
- *   1) 시드의 admin 계정을 만들고
- *   2) 기존 운영자들은 플레이어로 내린 뒤, 그중 가장 오래된 한 명을 오후 출제자로 둔다.
- *
- * admin 계정이 생기고 나면 조건이 거짓이 되므로 다시 실행해도 아무 일도 없다.
- * (운영자가 나중에 /setup 에서 출제자를 바꿔도 되돌려 놓지 않는다.)
- */
-async function migrateAccounts(db) {
-  const seedAdmin = SEED_USERS.find((u) => u.role === 'admin');
-  if (!seedAdmin) return [];
-
-  const total = await db.prepare(`SELECT COUNT(*) AS n FROM users`).first();
-  if (!total?.n) return []; // 계정이 하나도 없으면 초기 설정이 알아서 넣는다
-
-  const exists = await db
-    .prepare(`SELECT id FROM users WHERE username = ?`)
-    .bind(seedAdmin.username)
-    .first();
-  if (exists) return [];
-
-  const { results: legacyAdmins } = await db
-    .prepare(`SELECT id FROM users WHERE role = 'admin' ORDER BY id`)
-    .all();
-
-  const statements = [
-    db
-      .prepare(
-        `INSERT INTO users (username, display_name, avatar, role, password_hash, password_salt)
-         VALUES (?, ?, ?, 'admin', ?, ?)`,
-      )
-      .bind(seedAdmin.username, seedAdmin.displayName, seedAdmin.avatar, seedAdmin.hash, seedAdmin.salt),
-  ];
-
-  if (legacyAdmins?.length) {
-    statements.push(
-      db.prepare(
-        `UPDATE users SET role = 'player' WHERE role = 'admin' AND username <> ?`,
-      ).bind(seedAdmin.username),
-      ...assignSetterStatements(db, 'evening', legacyAdmins[0].id),
-    );
-  }
-
-  await db.batch(statements);
-  return ['users.admin-account'];
 }

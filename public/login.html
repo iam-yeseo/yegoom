@@ -6,13 +6,14 @@
   <meta name="theme-color" content="#fff9eb" />
   <title>로그인 · 예굼방 아케이드 🎮</title>
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/fonts.css" />
   <link rel="stylesheet" href="/css/arcade.css" />
   <link rel="icon" type="image/svg+xml" href="/assets/arcade/icon-cat.svg" />
 </head>
 <body>
   <main class="auth">
     <div class="arcade-wordmark"><img src="/assets/arcade/icon-cat.svg" alt="" width="40" height="40" /><div><b>YEGOOM</b><small>ARCADE · 예굼방 아케이드</small></div></div>
-    <img class="auth__art" src="/assets/arcade/hero.png" alt="게임기 앞에서 놀고 있는 고양이" width="640" height="427" />
+    <img class="auth__art" src="/assets/arcade/hero.webp" alt="게임기 앞에서 놀고 있는 고양이" width="640" height="427" fetchpriority="high" />
     <h1 class="auth__title">친구들이랑, 한 판 더!</h1>
     <p class="auth__sub">도파민에 중독된 사람들을 위한 최고의 선택</p>
 
@@ -38,7 +39,7 @@
   </main>
 
   <script type="module">
-    import { api, showMessage } from '/js/common.js';
+    import { api, showMessage, safeNextUrl } from '/js/common.js';
 
     const form = document.getElementById('login-form');
     const btn = document.getElementById('submit');
@@ -51,8 +52,7 @@
 
     function nextUrl() {
       const next = new URLSearchParams(location.search).get('next');
-      // 오픈 리다이렉트 방지: 같은 사이트의 경로만 허용
-      return next && next.startsWith('/') && !next.startsWith('//') ? next : '/';
+      return safeNextUrl(next);
     }
 
     form.addEventListener('submit', async (e) => {
