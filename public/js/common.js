@@ -120,14 +120,14 @@ export const QUIZ = {
   path: '/quiz',
 };
 
-/** 지금(KST) 진행 중인 게임 — 오전 게임 마감(10:00) 전이면 오전 */
+/** 지금(KST) 진행 중인 게임 — 오전 게임 마감(10:30) 전이면 오전 */
 export function currentGameKey(now = new Date()) {
-  const hour = Number(
-    new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Asia/Seoul', hour: '2-digit', hour12: false,
-    }).format(now),
-  );
-  return hour % 24 < 10 ? 'morning' : 'evening';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === 'hour').value) % 24;
+  const minute = Number(parts.find((p) => p.type === 'minute').value);
+  return hour * 60 + minute < 10 * 60 + 30 ? 'morning' : 'evening';
 }
 
 /* ---------------- 하단 탭바 ---------------- */

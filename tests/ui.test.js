@@ -39,7 +39,7 @@ async function mount(t,page,state,{user=player}={}) {
   return {w,doc,timers,calls,async refresh(ms){for(const timer of timers.filter(x=>x.ms===ms))timer.fn();for(let i=0;i<5;i++)await flush();}};
 }
 function timeState(key,extra={}) {
-  return {game:gameInfo(key),date:'2026-09-18',roundNo:3,status:'open',closed:false,revealed:false,isToday:true,isSetter:false,setter:friend,submitted:0,closesAt:key==='morning'?'10:00':'18:00',chances:{total:key==='evening'?3:0,used:0,remaining:3,log:[]},players:[{...player,isMe:true,totalScore:24},{...friend,totalScore:10}],...extra};
+  return {game:gameInfo(key),date:'2026-09-18',roundNo:3,status:'open',closed:false,revealed:false,isToday:true,isSetter:false,setter:friend,submitted:0,closesAt:key==='morning'?'10:30':'18:00',chances:{total:key==='evening'?3:0,used:0,remaining:3,log:[]},players:[{...player,isMe:true,totalScore:24},{...friend,totalScore:10}],...extra};
 }
 function partyState(extra={}) {
   return {round:{id:12,roundNo:3,state:'answering',question:'가장 좋아하는 여행지는?',deadline:null},mine:{answer:null,number:null,ready:false},players:[player,friend],lobby:[],answers:[],available:5,serverNow:Date.now(),...extra};

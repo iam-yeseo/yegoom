@@ -54,7 +54,7 @@ export function answerWindowOver(game, gameDate, now = new Date()) {
  * 정답 없이 넘겨 버린 마지막 날짜.
  * 이 날짜까지는 정답이 안 들어왔으면 '게임 없음' 으로 굳는다.
  *
- * 기준은 예측 마감이 아니라 정답 기록 마감이다. 오전 게임은 예측이 10시에 닫힌
+ * 기준은 예측 마감이 아니라 정답 기록 마감이다. 오전 게임은 예측이 10시 30분에 닫힌
  * 뒤에도 출제자가 정답을 넣을 수 있으니, 그날은 날짜가 바뀌어야 굳는다.
  */
 function answerVoidLimit(game, now = new Date()) {
